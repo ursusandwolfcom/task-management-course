@@ -127,6 +127,7 @@ are substituted in automated tests; live integration acceptance is a separate st
 
 ## Documentation
 
+- [Changelog](CHANGELOG.md): recent fixes, delivery changes and verification evidence.
 - [API reference](documentation/API.md): routes, example bodies, filters and access rules.
 - [Architecture](documentation/ARCHITECTURE.md): package map, data relationships, MapStruct and transactions.
 - [Spring lifecycle](documentation/SPRING_LIFECYCLE.md): singleton choices, initialization dependencies and AOP.

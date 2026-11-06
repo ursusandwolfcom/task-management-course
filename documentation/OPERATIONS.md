@@ -51,6 +51,24 @@ The Docker build runs Maven verification. Runtime runs as a non-root user with U
 defaults. Application and database ports are published on host loopback. The
 separate course Compose project uses its own PostgreSQL volume and local Mailpit.
 
+After startup, verify the local application without creating fixture accounts:
+
+```powershell
+docker compose --env-file .env.course ps
+Invoke-RestMethod http://127.0.0.1:8081/actuator/health
+(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8081/swagger-ui/index.html).StatusCode
+```
+
+Health should report UP and Swagger should return 200. The health check includes
+the database, but deliberately excludes Dropbox and SMTP. Protected routes such
+as /users/me must return 401 without a token. Mailpit is available at
+http://127.0.0.1:8026. These checks leave business data unchanged.
+
+A placeholder Dropbox token permits startup for core API evaluation, but does
+not enable upload/download/delete. Replace it in the ignored .env.course with
+dedicated app credentials before running the Dropbox acceptance procedure.
+Never publish generated local database passwords, JWT keys or provider tokens.
+
 Stop the stack while retaining database data:
 
 ```powershell

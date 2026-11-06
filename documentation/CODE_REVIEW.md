@@ -85,7 +85,10 @@ See the [lifecycle walkthrough](SPRING_LIFECYCLE.md).
 REVIEW-20261106-02: full Maven Wrapper clean verify passed on Corretto Java
 21.0.12.1 with 38 tests, no failures/errors/skips, no Checkstyle violations and
 the 60% line coverage gate satisfied. This local run uses H2 and mocked providers;
-PostgreSQL/container verification must be green on the final published PR head.
+line coverage was 94.69%. PostgreSQL, packaged startup/restart and Docker
+build/start/restart also passed on a1b830084a54fc02aad2fde40b31c88a5287a276 in
+[CI run 42239198040](https://github.com/ursusandwolfcom/task-management-course/actions/runs/42239198040).
+Subsequent published commits require their own green CI.
 
 Focused MapStruct verification passed 12 API tests; general review verification
 passed 16 tests; combined JPA/lifecycle/security/notification verification passed 14
