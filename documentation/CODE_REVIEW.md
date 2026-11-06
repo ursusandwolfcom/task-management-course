@@ -11,6 +11,10 @@ acceptance remain separate.
 
 | Finding | Evidence / impact | Resolution |
 |---|---|---|
+| REVIEW-20261106-02: Dropbox rollback compensation | A controlled Spring/H2 probe demonstrated orphan uploads and deleted remote files with restored metadata after rollback. | Transaction completion callbacks clean uploaded files or restore the original Dropbox revision. Regression coverage includes post-flush rollback and stream-close failure. Compensation failure/unknown outcomes are logged for manual reconciliation; no cross-system atomicity claim. |
+| REVIEW-20261106-02: attachment route contract | GET-by-task previously returned only metadata. | GET-by-task now fetches actual Dropbox files into a paginated ZIP; metadata moves to /api/attachments/metadata. Individual downloads remain available. Archives are bounded to 25 MiB uncompressed. |
+| REVIEW-20261106-02: ordinary task update notifications | Same-assignee changes to status, priority, dates and other editable fields had no notification. | Meaningful updates notify current assignee and owner, excluding the actor and duplicate recipients. No-op PUT sends nothing; reassignment sends one assignment message to the new assignee. |
+| REVIEW-20261106-02: repository protection | main was unprotected. | Required verify/up-to-date branch, one approval, resolved conversations, no force push/deletion; administrators included. Human approval remains required to merge. |
 | Major: attachment access read before locking | Membership could already be loaded when a request waited for the lock. The pre-fix test returned 409 instead of 404; successful unauthorized remote deletion was not demonstrated. | Lock before authorization. Regression verifies 404, retained metadata and no Dropbox call. |
 | Minor: explicit list sort masked by repository ordering | Fixed ID-desc ordering preceded client sorting for comments/attachments. | Pageable controls sort; descending ID remains the default. Ascending-comment regression added. |
 | Minor: filename control characters | Old less-than-32 predicate missed DEL/C1 controls. | Character.isISOControl plus HTTP boundary tests. |
@@ -77,6 +81,11 @@ Liquibase before JPA validation. Transaction and async proxies remain active.
 See the [lifecycle walkthrough](SPRING_LIFECYCLE.md).
 
 ## Validation and limits
+
+REVIEW-20261106-02: full Maven Wrapper clean verify passed on Corretto Java
+21.0.12.1 with 38 tests, no failures/errors/skips, no Checkstyle violations and
+the 60% line coverage gate satisfied. This local run uses H2 and mocked providers;
+PostgreSQL/container verification must be green on the final published PR head.
 
 Focused MapStruct verification passed 12 API tests; general review verification
 passed 16 tests; combined JPA/lifecycle/security/notification verification passed 14

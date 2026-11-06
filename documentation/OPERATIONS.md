@@ -108,8 +108,18 @@ token/app credentials. No fallback storage provider is configured.
 
 Automated tests use a substituted SDK client. Passing tests does not prove real
 account scopes, token renewal or provider availability. Dropbox and PostgreSQL
-cannot commit atomically; investigate failures across their boundary before
-manually changing attachment metadata.
+cannot commit atomically. A database rollback deletes a newly uploaded file, or
+restores a deleted file using its original Dropbox path and revision. Deletion
+therefore also requires metadata-read and restore/content-write permissions.
+
+Compensation runs after transaction completion in the application process. A
+process crash, unknown commit outcome or Dropbox failure during compensation
+still requires manual reconciliation; there is no durable retry subsystem.
+The application logs the affected Dropbox file ID without provider credentials.
+For a failed upload cleanup, verify metadata is absent before removing the orphan.
+For a failed delete restoration, compare the retained attachment ID with Dropbox
+file history and restore the original revision, verifying the Dropbox file ID.
+Do not delete database metadata merely to suppress a download error.
 
 ## Email acceptance
 
@@ -117,6 +127,10 @@ Compose defaults to Mailpit at http://127.0.0.1:8026 and does not deliver to rea
 recipients. Assign a task to another project participant and add a comment as its
 owner; inspect the captured messages. An assignee's own comment does not notify
 that same assignee. Reassigning to the same person does not send a new assignment.
+Change a task's status, priority, due date, name, description or labels as another
+participant: the current assignee and owner receive one update each, excluding the
+actor and duplicate recipients. A new assignee gets one assignment message;
+the owner gets an update unless they made the change. Unchanged PUTs send nothing.
 
 Open assigned tasks due today/tomorrow receive reminders at 09:00 UTC. Completed
 and unassigned tasks are excluded. There is no restart catch-up or durable retry.
@@ -149,6 +163,14 @@ No default administrator account or password is created.
 | No external email | Compose sends to Mailpit; check SMTP settings for real delivery |
 
 ## Export to a new repository
+
+The independent course repository is now published as
+[task-management-course](https://github.com/ursusandwolfcom/task-management-course),
+with main as its default branch. The instructions below describe a further export;
+they are not required to use the existing submission. Its protected main requires
+the verify check, an up-to-date PR branch, one approving review and resolved
+conversations, including for administrators. A human reviewer other than the PR
+author must approve; the single author cannot approve their own PR.
 
 Export the tested commit using Git so ignored secrets, local docs and build output
 are excluded:

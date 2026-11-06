@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.dropbox.core.DbxException;
@@ -16,6 +17,7 @@ import com.dropbox.core.v2.files.DeleteErrorException;
 import com.dropbox.core.v2.files.FileMetadata;
 import com.dropbox.core.v2.files.LookupError;
 import com.example.taskmanagement.service.DropboxService;
+import com.example.taskmanagement.service.DropboxService.FileRevision;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,26 @@ import org.springframework.web.server.ResponseStatusException;
 class DropboxServiceTest {
     private final DbxClientV2 client = mock(DbxClientV2.class, RETURNS_DEEP_STUBS);
     private final DropboxService service = new DropboxService(client);
+
+    @Test
+    void deletedFileRestorationUsesOriginalPathRevisionAndChecksFileIdentity() throws Exception {
+        var metadata = mock(FileMetadata.class);
+        when(metadata.getId()).thenReturn("id:restore");
+        when(metadata.getPathLower()).thenReturn("/course-tasks/original.txt");
+        when(metadata.getRev()).thenReturn("original-revision");
+        when(client.files().getMetadata("id:restore")).thenReturn(metadata);
+        var revision = service.revision("id:restore");
+        assertThat(revision).isEqualTo(new FileRevision("id:restore", "/course-tasks/original.txt",
+                "original-revision"));
+        when(client.files().restore(revision.path(), revision.revision())).thenReturn(metadata);
+        service.restore(revision);
+        verify(client.files()).restore("/course-tasks/original.txt", "original-revision");
+        when(metadata.getId()).thenReturn("id:unexpected");
+        assertThatThrownBy(() -> service.restore(revision)).isInstanceOf(ResponseStatusException.class);
+        when(client.files().getMetadata("id:private-failure")).thenThrow(new DbxException("secret"));
+        assertThatThrownBy(() -> service.revision("id:private-failure"))
+                .isInstanceOf(ResponseStatusException.class).hasMessageNotContaining("secret");
+    }
 
     @Test
     void onlyProviderNotFoundIsAnIdempotentDeletion() throws Exception {

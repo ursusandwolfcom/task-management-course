@@ -28,9 +28,9 @@ the user. This checklist distinguishes implemented code from external acceptance
 
 ## Contract and technology differences
 
-- Attachment GET-by-task returns metadata; actual file bytes are retrieved through
-  GET /api/attachments/{id}/download. The assignment describes retrieval at the
-  list route; this split should be confirmed with the mentor.
+- Attachment GET-by-task returns a paginated ZIP of actual Dropbox files.
+  Metadata is available at GET /api/attachments/metadata?taskId=..., and individual
+  downloads remain available at GET /api/attachments/{id}/download.
 - The course branch imports .env.course to protect the existing product's .env.
   A placeholder .env.sample is committed; both real secret files remain ignored.
 - Java 21/PostgreSQL are retained instead of the example's Java 22/MySQL. The
@@ -50,7 +50,7 @@ the user. This checklist distinguishes implemented code from external acceptance
 | High-user-count scalability | Not established by load measurements |
 | Shared task board | Must be supplied for the submitted repository |
 | Per-task PRs and review history | Snapshot export does not transfer/satisfy this process requirement |
-| Branch protections | Configure and verify in the new repository |
+| Branch protections | main requires verify, an up-to-date branch, one approval and resolved conversations; enforced for administrators |
 | Automatic deployment | Not implemented; CI verifies builds/tests/containers |
 | AWS deployment | Optional in the assignment; outside this submission |
 | Google Calendar | Advanced integration not implemented |

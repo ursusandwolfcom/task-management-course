@@ -15,7 +15,9 @@ import com.example.taskmanagement.repository.TaskRepository;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -107,6 +109,10 @@ public class TaskService {
         var task = new Task();
         task.setProject(project);
         apply(task, request);
+        if (task.getAssignee() != null) {
+            events.publishEvent(new TaskEmail(task.getAssignee().getEmail(), "Task assigned",
+                    "Assigned: " + task.getName()));
+        }
         return mapper.toResponse(tasks.saveAndFlush(task));
     }
 
@@ -115,7 +121,12 @@ public class TaskService {
         if (!task.getProject().getId().equals(request.projectId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Task project cannot change");
         }
+        Long previousAssignee = task.getAssignee() == null ? null : task.getAssignee().getId();
+        boolean changed = changed(task, request);
         apply(task, request);
+        if (changed) {
+            notifyUpdate(task, actorId, previousAssignee);
+        }
         return mapper.toResponse(tasks.saveAndFlush(task));
     }
 
@@ -145,7 +156,6 @@ public class TaskService {
         if (selectedLabels.size() != request.labelIds().size()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Label not found");
         }
-        Long previous = task.getAssignee() == null ? null : task.getAssignee().getId();
         task.setName(request.name().trim());
         task.setDescription(request.description());
         task.setPriority(request.priority());
@@ -153,8 +163,33 @@ public class TaskService {
         task.setDueDate(request.dueDate());
         task.setAssignee(assignee);
         task.setLabels(new HashSet<>(selectedLabels));
-        if (assignee != null && !Objects.equals(previous, assignee.getId())) {
-            events.publishEvent(new TaskEmail(assignee.getEmail(), "Task assigned", "Assigned: " + task.getName()));
+    }
+
+    private boolean changed(Task task, TaskRequest request) {
+        Long assigneeId = task.getAssignee() == null ? null : task.getAssignee().getId();
+        var labelIds = task.getLabels().stream().map(label -> label.getId()).collect(Collectors.toSet());
+        return !task.getName().equals(request.name().trim())
+                || !Objects.equals(task.getDescription(), request.description())
+                || task.getStatus() != request.status() || task.getPriority() != request.priority()
+                || !Objects.equals(task.getDueDate(), request.dueDate())
+                || !Objects.equals(assigneeId, request.assigneeId()) || !labelIds.equals(request.labelIds());
+    }
+
+    private void notifyUpdate(Task task, Long actorId, Long previousAssignee) {
+        var recipients = new LinkedHashMap<Long, User>();
+        User owner = task.getProject().getOwner();
+        recipients.put(owner.getId(), owner);
+        User assignee = task.getAssignee();
+        if (assignee != null) {
+            recipients.put(assignee.getId(), assignee);
+        }
+        recipients.remove(actorId);
+        for (User recipient : recipients.values()) {
+            boolean assigned = assignee != null && recipient.getId().equals(assignee.getId())
+                    && !Objects.equals(previousAssignee, assignee.getId());
+            events.publishEvent(new TaskEmail(recipient.getEmail(), assigned ? "Task assigned" : "Task updated",
+                    task.getName() + " — status: " + task.getStatus() + ", priority: " + task.getPriority()
+                            + ", due: " + task.getDueDate()));
         }
     }
 }

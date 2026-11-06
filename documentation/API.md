@@ -59,7 +59,8 @@ authenticated request, so a role change applies to already-issued JWTs.
 | Labels | `POST/GET /api/labels` | Create/list the shared catalog |
 | Labels | `PUT/DELETE /api/labels/{id}` | Replace/delete a label |
 | Attachments | `POST /api/attachments?taskId={id}` | Multipart form field `file` |
-| Attachments | `GET /api/attachments?taskId={id}` | Paginated metadata list |
+| Attachments | `GET /api/attachments?taskId={id}` | ZIP with actual Dropbox files for the requested page |
+| Attachments | `GET /api/attachments/metadata?taskId={id}` | Paginated metadata list |
 | Attachments | `GET /api/attachments/{id}/download` | Actual Dropbox bytes with Content-Disposition |
 | Attachments | `DELETE /api/attachments/{id}` | Remove remote file and metadata |
 
@@ -114,6 +115,11 @@ Project owner or member may be the assignee. Omit/set null assigneeId for an
 unassigned task. Description and dueDate are optional. `labelIds` is required and
 may be empty. Project ID cannot change after creation. PUT replaces editable fields.
 Assignment to a different non-null assignee produces an email after commit.
+On task update, changes to name, description, status, priority, due date, labels
+or assignee notify the current assignee and project owner after commit. The actor
+is excluded and a user who is both owner and assignee receives one message.
+A new assignee receives an assignment email instead of an additional update email.
+A PUT with unchanged values sends no email; the previous assignee is not notified.
 
 **4. Add a comment** — `POST /api/comments`:
 
@@ -133,8 +139,15 @@ curl.exe -X POST "http://127.0.0.1:8081/api/attachments?taskId=1" `
 
 Uploads accept 1 byte to 5 MB. The original filename must be a single name without
 path separators or control characters. The response contains the stored Dropbox
-file ID. List metadata to find the attachment ID, then download its bytes using
-`GET /api/attachments/{id}/download`.
+file ID. `GET /api/attachments?taskId=1` downloads a ZIP containing actual Dropbox
+files for the requested page. Entries use `<attachmentId>/<originalFilename>` so
+duplicate filenames remain distinct. Pagination and sorting use the same parameters
+as other lists; an empty page returns an empty ZIP. A page is limited to 25 MiB of
+uncompressed content; use a smaller `size` if the server returns 413. Provider
+failure returns 502 before a partial archive is sent.
+
+Use `GET /api/attachments/metadata?taskId=1` for metadata and pagination totals,
+or `GET /api/attachments/{id}/download` to download an individual file.
 
 **6. Complete the task** — PUT the complete task body with `status` changed to
 `COMPLETED`. Status fields are manually editable metadata; there are no execution
@@ -187,7 +200,7 @@ Example: `/api/tasks?projectId=1&priority=HIGH&status=NOT_STARTED&dueTo=2030-02-
 | 403 | Authenticated caller lacks owner/admin/comment-author permission |
 | 404 | Missing resource or project content inaccessible to the caller |
 | 409 | Duplicate data, concurrent change, invalid assignee or deletion/member-removal guard |
-| 413 | Multipart request exceeds configured upload limits |
+| 413 | Multipart request exceeds upload limits, or archive page exceeds 25 MiB |
 | 502 | Dropbox operation or file transfer failed |
 
 Application validation/conflict/provider errors use Spring problem responses;

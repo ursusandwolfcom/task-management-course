@@ -3,6 +3,7 @@ package com.example.taskmanagement.service;
 import com.dropbox.core.DbxException;
 import com.dropbox.core.v2.DbxClientV2;
 import com.dropbox.core.v2.files.DeleteErrorException;
+import com.dropbox.core.v2.files.FileMetadata;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.UUID;
@@ -12,6 +13,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class DropboxService {
+    public record FileRevision(String id, String path, String revision) {
+    }
+
     private final DbxClientV2 client;
 
     public DropboxService(DbxClientV2 client) {
@@ -44,6 +48,28 @@ public class DropboxService {
             client.files().deleteV2(id);
         } catch (DeleteErrorException exception) {
             if (!exception.errorValue.isPathLookup() || !exception.errorValue.getPathLookupValue().isNotFound()) {
+                throw unavailable();
+            }
+        } catch (DbxException exception) {
+            throw unavailable();
+        }
+    }
+
+    public FileRevision revision(String id) {
+        try {
+            if (client.files().getMetadata(id) instanceof FileMetadata file && file.getPathLower() != null) {
+                return new FileRevision(file.getId(), file.getPathLower(), file.getRev());
+            }
+            throw unavailable();
+        } catch (DbxException exception) {
+            throw unavailable();
+        }
+    }
+
+    public void restore(FileRevision revision) {
+        try {
+            var restored = client.files().restore(revision.path(), revision.revision());
+            if (!restored.getId().equals(revision.id())) {
                 throw unavailable();
             }
         } catch (DbxException exception) {

@@ -88,7 +88,7 @@ class ConcurrencyTest extends ApiTestSupport {
             var result = pending.get(10, TimeUnit.SECONDS);
             verifyNoInteractions(dropbox);
             assertThat(result.getStatus()).as(result.getContentAsString()).isEqualTo(404);
-            assertThat(json(200, "GET", "/api/attachments?taskId=" + task, owner.token(), null)
+            assertThat(json(200, "GET", "/api/attachments/metadata?taskId=" + task, owner.token(), null)
                     .get("content").size()).isEqualTo(1);
         } finally {
             executor.shutdownNow();

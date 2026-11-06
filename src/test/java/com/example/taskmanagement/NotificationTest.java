@@ -18,6 +18,87 @@ import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 
 class NotificationTest extends ApiTestSupport {
+    @Test
+    void meaningfulEditsNotifyOwnerAndAssigneeButNoOpPutDoesNot() throws Exception {
+        var owner = account();
+        var assignee = account();
+        var editor = account();
+        long project = project(owner, assignee, editor);
+        long task = task(owner, project, assignee.id());
+        verify(mail, timeout(5000)).send(any(SimpleMailMessage.class));
+        clearInvocations(mail);
+        var body = taskBody(project, assignee.id(), List.of());
+        json(200, "PUT", "/api/tasks/" + task, editor.token(), body);
+        org.mockito.Mockito.verifyNoInteractions(mail);
+        long label = json(201, "POST", "/api/labels", owner.token(),
+                Map.of("name", "notify-" + owner.name(), "color", "#123456")).get("id").asLong();
+        var edits = List.<Map.Entry<String, Object>>of(Map.entry("name", "Renamed task"),
+                Map.entry("description", "Updated description"), Map.entry("status", "IN_PROGRESS"),
+                Map.entry("priority", "HIGH"), Map.entry("dueDate", "2030-02-12"),
+                Map.entry("labelIds", List.of(label)));
+        for (var edit : edits) {
+            body.put(edit.getKey(), edit.getValue());
+            json(200, "PUT", "/api/tasks/" + task, editor.token(), body);
+            var sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
+            verify(mail, timeout(5000).times(2)).send(sent.capture());
+            assertThat(sent.getAllValues()).extracting(message -> message.getTo()[0])
+                    .containsExactlyInAnyOrder(owner.name() + "@example.test", assignee.name() + "@example.test");
+            assertThat(sent.getAllValues()).extracting(SimpleMailMessage::getSubject).containsOnly("Task updated");
+            clearInvocations(mail);
+        }
+    }
+
+    @Test
+    void recipientsAreDeduplicatedAndActorAndRolledBackEditsAreExcluded() throws Exception {
+        var owner = account();
+        var editor = account();
+        long project = project(owner, editor);
+        long task = task(owner, project, owner.id());
+        verify(mail, timeout(5000)).send(any(SimpleMailMessage.class));
+        clearInvocations(mail);
+        var body = taskBody(project, owner.id(), List.of());
+        body.put("status", "IN_PROGRESS");
+        json(200, "PUT", "/api/tasks/" + task, editor.token(), body);
+        var sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mail, timeout(5000)).send(sent.capture());
+        assertThat(sent.getValue().getTo()).containsExactly(owner.name() + "@example.test");
+        clearInvocations(mail);
+        body.put("priority", "HIGH");
+        json(200, "PUT", "/api/tasks/" + task, owner.token(), body);
+        org.mockito.Mockito.verifyNoInteractions(mail);
+        body.put("priority", "LOW");
+        transactions.executeWithoutResult(status -> {
+            try {
+                json(200, "PUT", "/api/tasks/" + task, editor.token(), body);
+            } catch (Exception failure) {
+                throw new IllegalStateException(failure);
+            }
+            status.setRollbackOnly();
+        });
+        org.mockito.Mockito.verifyNoInteractions(mail);
+        assertThat(json(200, "GET", "/api/tasks/" + task, owner.token(), null).get("priority").asText())
+                .isEqualTo("HIGH");
+    }
+
+    @Test
+    void reassignmentNotifiesNewAssigneeAndOwnerOnceEach() throws Exception {
+        var owner = account();
+        var previous = account();
+        var next = account();
+        var editor = account();
+        long project = project(owner, previous, next, editor);
+        long task = task(owner, project, previous.id());
+        verify(mail, timeout(5000)).send(any(SimpleMailMessage.class));
+        clearInvocations(mail);
+        json(200, "PUT", "/api/tasks/" + task, editor.token(), taskBody(project, next.id(), List.of()));
+        var sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mail, timeout(5000).times(2)).send(sent.capture());
+        assertThat(sent.getAllValues()).extracting(message -> message.getTo()[0])
+                .containsExactlyInAnyOrder(owner.name() + "@example.test", next.name() + "@example.test");
+        assertThat(sent.getAllValues()).extracting(SimpleMailMessage::getSubject)
+                .containsExactlyInAnyOrder("Task assigned", "Task updated");
+    }
+
     @Autowired
     private DeadlineReminderService reminders;
     @Autowired

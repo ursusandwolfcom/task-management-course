@@ -136,8 +136,9 @@ are substituted in automated tests; live integration acceptance is a separate st
 
 ## Scope and delivery
 
-This standalone course version lives on `course/submission`. The extended product
-is preserved separately; this application does not migrate its data. Frontend,
+This standalone course repository publishes its submission on `main`; it was
+exported from the extended product's `course/submission` branch. The extended
+product is preserved separately; this application does not migrate its data. Frontend,
 graph planning, resource calendars, time tracking and extra storage/notification
 providers are outside this version.
 

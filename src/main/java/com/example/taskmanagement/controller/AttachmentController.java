@@ -33,10 +33,21 @@ public class AttachmentController {
         this.attachments = attachments;
     }
 
-    @GetMapping
+    @GetMapping("/metadata")
     public Page<AttachmentResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam Long taskId,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
         return attachments.list(Long.valueOf(jwt.getSubject()), taskId, pageable);
+    }
+
+    @GetMapping(produces = "application/zip")
+    public ResponseEntity<byte[]> archive(@AuthenticationPrincipal Jwt jwt, @RequestParam Long taskId,
+            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable)
+            throws IOException {
+        var result = attachments.archive(Long.valueOf(jwt.getSubject()), taskId, pageable);
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType("application/zip"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(result.filename(), StandardCharsets.UTF_8).build().toString())
+                .body(result.content());
     }
 
     @GetMapping("/{id}/download")
