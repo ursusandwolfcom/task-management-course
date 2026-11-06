@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: course-001
+      author: task-management
+      changes:
+        - sqlFile:
+            path: 001-course-schema.sql
+            relativeToChangelogFile: true

@@ -1,0 +1,12 @@
+**
+!Dockerfile
+!pom.xml
+!mvnw
+!.mvn/
+!.mvn/**
+!config/
+!config/**
+!src/
+!src/**
+**/.env
+**/.env.*
