@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/labels")
+@RequestMapping("/labels")
 public class LabelController {
     private final LabelService labels;
 
@@ -75,7 +75,7 @@ public class LabelController {
     })
     public ResponseEntity<LabelResponse> create(@Valid @RequestBody LabelRequest request) {
         var result = labels.create(request);
-        return ResponseEntity.created(URI.create("/api/labels")).body(result);
+        return ResponseEntity.created(URI.create("/labels")).body(result);
     }
 
     @PutMapping("/{id}")

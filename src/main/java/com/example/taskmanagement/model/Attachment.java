@@ -11,15 +11,24 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.LocalDateTime;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "attachments")
 public class Attachment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Setter(AccessLevel.NONE)
     private Long id;
 
     @Version
+    @Setter(AccessLevel.NONE)
     private long version;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -34,47 +43,4 @@ public class Attachment {
 
     @Column(nullable = false)
     private LocalDateTime uploadDate;
-
-    public Attachment() {
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public long getVersion() {
-        return version;
-    }
-
-    public Task getTask() {
-        return task;
-    }
-
-    public void setTask(Task task) {
-        this.task = task;
-    }
-
-    public String getDropboxFileId() {
-        return dropboxFileId;
-    }
-
-    public void setDropboxFileId(String dropboxFileId) {
-        this.dropboxFileId = dropboxFileId;
-    }
-
-    public String getFilename() {
-        return filename;
-    }
-
-    public void setFilename(String filename) {
-        this.filename = filename;
-    }
-
-    public LocalDateTime getUploadDate() {
-        return uploadDate;
-    }
-
-    public void setUploadDate(LocalDateTime uploadDate) {
-        this.uploadDate = uploadDate;
-    }
 }

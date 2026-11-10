@@ -12,14 +12,104 @@ There are no module ports, planning engines or alternate storage providers.
 | Package | Responsibility | Start reading |
 |---|---|---|
 | `controller` | Validated HTTP requests, status codes and authenticated actor IDs | [TaskController](../src/main/java/com/example/taskmanagement/controller/TaskController.java) |
-| `service` | CRUD, authorization and integrations | [TaskService](../src/main/java/com/example/taskmanagement/service/TaskService.java) |
+| `service` | Interfaces + `*ServiceImpl` for CRUD, authorization and integrations | [TaskService](../src/main/java/com/example/taskmanagement/service/TaskService.java) / [TaskServiceImpl](../src/main/java/com/example/taskmanagement/service/TaskServiceImpl.java) |
 | `repository` | Spring Data queries, pagination and project locking | [TaskRepository](../src/main/java/com/example/taskmanagement/repository/TaskRepository.java) |
 | `model` | Six JPA entities and assignment enums | [Task](../src/main/java/com/example/taskmanagement/model/Task.java) |
 | `dto` | Validated requests, filters and response records | [TaskRequest](../src/main/java/com/example/taskmanagement/dto/TaskRequest.java) |
 | `mapper` | Compile-time entity/DTO transformations | [ResponseMapper](../src/main/java/com/example/taskmanagement/mapper/ResponseMapper.java) |
 | `security` | JWT validation, live roles and BCrypt login | [SecurityConfig](../src/main/java/com/example/taskmanagement/security/SecurityConfig.java) |
 | `config` | UTC clock, Dropbox client, async email and OpenAPI | [ApplicationConfig](../src/main/java/com/example/taskmanagement/config/ApplicationConfig.java) |
-| `exception` | Safe HTTP problem responses | [GlobalExceptionHandler](../src/main/java/com/example/taskmanagement/exception/GlobalExceptionHandler.java) |
+| `exception` | Custom API exceptions and Problem Detail mapping | [GlobalExceptionHandler](../src/main/java/com/example/taskmanagement/exception/GlobalExceptionHandler.java) |
+
+## Custom API exceptions
+
+Services throw typed `ApiException` subclasses instead of Spring's
+`ResponseStatusException`. Each subclass carries an `HttpStatus` and a stable
+message. HTTP clients receive RFC 7807 `ProblemDetail` JSON.
+
+| Exception | HTTP status | Typical use |
+|---|---|---|
+| `BadRequestException` | 400 | Validation/business input errors |
+| `UnauthorizedException` | 401 | Invalid login credentials |
+| `ForbiddenException` | 403 | Missing owner/admin rights |
+| `NotFoundException` | 404 | Missing entity for the caller |
+| `ConflictException` | 409 | Unique/state conflicts |
+| `PayloadTooLargeException` | 413 | Attachment ZIP page over 25 MiB |
+| `BadGatewayException` | 502 | Dropbox provider failures |
+
+### Why exception classes do not use Lombok
+
+Handwritten get/set (and Lombok `@Getter`/`@Setter`) are unnecessary on these
+types. They are small immutable failure values, not mutable beans.
+
+| Piece | What it holds | Why Lombok is not needed |
+|---|---|---|
+| `ApiException` | `final HttpStatus status` + message via `RuntimeException` | One field; a single `getStatus()` is clearer than a class-level annotation. Message already has `getMessage()` from the JDK. |
+| Seven subclasses | Only call `super(HttpStatus.…, message)` | No extra fields → nothing to generate getters/setters for. |
+| Setters | — | Status and message must not change after construction; setters would invite mutation of a thrown error. |
+| `@RequiredArgsConstructor` / `@Data` | — | Construction already encodes status in each subclass constructor. `@Data` would add mutable-style `equals`/`hashCode` noise that exceptions should not rely on. |
+
+Optional `@Getter` on `ApiException` alone would only replace the existing
+`getStatus()` method; it adds no clarity here, so the project keeps the explicit
+method. Controllers/services use Lombok for DI and entities; exception types stay
+plain Java.
+
+### How `GlobalExceptionHandler` intercepts exceptions
+
+Controllers stay thin: they call services and do not wrap every failure in
+`try/catch`. When a service throws, the exception propagates out of the
+controller method. Spring MVC then looks for an `@ExceptionHandler` that can
+handle that type.
+
+`GlobalExceptionHandler` is a `@RestControllerAdvice` bean (extends
+`ResponseEntityExceptionHandler`). Advice applies to all `@RestController`
+endpoints in the application. Spring registers each `@ExceptionHandler` method
+as a resolver for the declared exception type(s).
+
+Request flow:
+
+1. Filter chain / DispatcherServlet invokes the controller.
+2. The service throws, for example, `new NotFoundException("Task not found")`.
+3. DispatcherServlet does not return a normal body; it asks exception resolvers.
+4. The resolver matches `NotFoundException` to `@ExceptionHandler(ApiException.class)`
+   because every custom domain exception **extends** `ApiException` (subtype match).
+5. `apiFailure` builds `ProblemDetail.forStatusAndDetail(status, message)`.
+6. With `spring.mvc.problemdetails.enabled=true`, the response is
+   `application/problem+json` and the HTTP status comes from the problem's status.
+
+```java
+@RestControllerAdvice
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+    @ExceptionHandler(ApiException.class)
+    public ProblemDetail apiFailure(ApiException exception) {
+        return ProblemDetail.forStatusAndDetail(
+                exception.getStatus(), exception.getMessage());
+    }
+}
+```
+
+One handler covers all seven subclasses. There is no need for a separate
+`@ExceptionHandler` per status class unless the response shape differs.
+
+Additional handlers on the same advice catch infrastructure failures that are
+not `ApiException`:
+
+| Trigger | Status | Detail |
+|---|---|---|
+| `PropertyReferenceException` | 400 | Unknown sort field |
+| `DataIntegrityViolationException` / optimistic lock | 409 | Concurrent or unique conflict |
+| `IOException` | 502 | File transfer failed |
+
+`ResponseEntityExceptionHandler` (the superclass) already maps many Spring MVC
+errors (for example Bean Validation / malformed JSON) into problem responses.
+Our advice only adds the domain and infrastructure cases above.
+
+**Not intercepted here:** failures stopped in the security filter chain before
+the controller runs (missing/invalid JWT). Those never reach
+`GlobalExceptionHandler`; Spring Security answers with 401/403 itself.
+
+See
+[GlobalExceptionHandler.java](../src/main/java/com/example/taskmanagement/exception/GlobalExceptionHandler.java).
 
 ## Data model
 
@@ -40,10 +130,14 @@ and optimistic `version` fields; DTOs expose association IDs rather than persist
 objects. Comments and attachments use `LocalDateTime` interpreted as UTC. Project
 dates and task due dates use `LocalDate`.
 
-[The initial migration](../src/main/resources/db/changelog/001-course-schema.sql)
-defines foreign keys, enum constraints, uniqueness and retrieval indexes. Both
-application tables and Liquibase tracking are in `public`; Hibernate validates the
-schema instead of changing it at startup.
+[The initial YAML changelog](../src/main/resources/db/changelog/001-course-schema.yaml)
+(`course-001`, included from
+[db.changelog-master.yaml](../src/main/resources/db/changelog/db.changelog-master.yaml))
+defines tables, foreign keys, uniqueness and retrieval indexes with Liquibase
+`createTable` / `createIndex` change types. Enum and date-range checks use small
+`sql` ALTER statements because community Liquibase does not ship
+`addCheckConstraint`. Both application tables and Liquibase tracking are in
+`public`; Hibernate validates the schema instead of changing it at startup.
 
 ## MapStruct in practice
 
@@ -95,8 +189,12 @@ annotation processing and run the Maven compile goal. The configuration follows
 Spring DI beans use constructor injection. Where the constructor only assigns
 `final` dependencies, the project uses Lombok
 [`@RequiredArgsConstructor`](https://projectlombok.org/features/RequiredArgsConstructor)
-instead of a handwritten constructor. Controllers and most services follow that
-pattern. Maven runs Lombok before MapStruct via `lombok-mapstruct-binding`.
+instead of a handwritten constructor. Controllers and most `*ServiceImpl`
+classes follow that pattern. Maven runs Lombok before MapStruct via
+`lombok-mapstruct-binding`. Domain services expose an interface
+(`UserService`, `ProjectService`, …) and a Spring `@Service` implementation
+(`UserServiceImpl`, …); controllers and collaborating services depend on the
+interface.
 
 **Do not** put Lombok on JPA entities for this purpose. Entities keep an explicit
 no-arg constructor (and ordinary accessors) so Hibernate can instantiate and
@@ -131,10 +229,10 @@ correctness and would obscure the security intent.
 
 See [JwtService](../src/main/java/com/example/taskmanagement/security/JwtService.java).
 
-### 2. `EmailService` — `@Value` must stay on the constructor parameter
+### 2. `EmailServiceImpl` — `@Value` must stay on the constructor parameter
 
 ```java
-public EmailService(JavaMailSender sender, @Value("${notification.from}") String from) {
+public EmailServiceImpl(JavaMailSender sender, @Value("${notification.from}") String from) {
     this.sender = sender;
     this.from = from;
 }
@@ -152,11 +250,42 @@ constructor injection and makes the configuration key visible at the injection
 point. Alternatives (`@ConfigurationProperties`, a dedicated settings bean) are
 valid but heavier than this one-line property.
 
-See [EmailService](../src/main/java/com/example/taskmanagement/service/EmailService.java).
+See [EmailServiceImpl](../src/main/java/com/example/taskmanagement/service/EmailServiceImpl.java).
 
 **Rule of thumb:** use `@RequiredArgsConstructor` when the constructor would be
 only field assignments; keep a handwritten constructor when it contains logic or
 parameter annotations Spring must process.
+
+### JPA entities use `@Getter` / `@Setter` / `@NoArgsConstructor`
+
+The six entities (`User`, `Project`, `Task`, `Comment`, `Attachment`, `Label`)
+use Lombok accessors instead of handwritten get/set methods:
+
+```java
+@Getter
+@Setter
+@NoArgsConstructor
+@Entity
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Setter(AccessLevel.NONE)
+    private Long id;
+
+    @Version
+    @Setter(AccessLevel.NONE)
+    private long version;
+    // remaining fields keep class-level @Getter/@Setter
+}
+```
+
+Do **not** use `@Data` on entities: it generates `equals`/`hashCode`/`toString`
+from mutable fields and associations, which is unsafe for JPA. `id` and
+`version` keep `@Setter(AccessLevel.NONE)` so identity and optimistic locking
+stay under persistence control.
+
+Custom `ApiException` types also skip Lombok accessors; see
+[Why exception classes do not use Lombok](#why-exception-classes-do-not-use-lombok).
 
 ## OpenAPI / Swagger special cases
 

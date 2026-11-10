@@ -21,16 +21,16 @@ the user. This checklist distinguishes implemented code from external acceptance
 | Deadline/comment/update notifications | [EmailService](../src/main/java/com/example/taskmanagement/service/EmailService.java), [DeadlineReminderService](../src/main/java/com/example/taskmanagement/service/DeadlineReminderService.java) |
 | Search and filters | Project/Task filter DTOs and service specifications |
 | MapStruct usage | Six response mappings, nested/collection ID mapping, label creation and @MappingTarget update |
-| Database migrations and health | Liquibase in public, ddl-auto=validate, /actuator/health |
-| Swagger and setup documentation | /swagger-ui/index.html, /v3/api-docs and this documentation |
+| Database migrations and health | Liquibase in public, ddl-auto=validate, context-path + /actuator/health |
+| Swagger and setup documentation | context-path + /swagger-ui and /v3/api-docs; this documentation |
 | Docker and CI | [Dockerfile](../Dockerfile), [Compose](../compose.yaml), [workflow](../.github/workflows/ci.yml) |
 | Checkstyle and >=60% coverage | Maven verify and JaCoCo gate in [pom.xml](../pom.xml) |
 
 ## Contract and technology differences
 
 - Attachment GET-by-task returns a paginated ZIP of actual Dropbox files.
-  Metadata is available at GET /api/attachments/metadata?taskId=..., and individual
-  downloads remain available at GET /api/attachments/{id}/download.
+  Metadata is available at GET /attachments/metadata?taskId=..., and individual
+  downloads remain available at GET /attachments/{id}/download.
 - The course branch imports .env.course to protect the existing product's .env.
   A placeholder .env.sample is committed; both real secret files remain ignored.
 - Java 21/PostgreSQL are retained instead of the example's Java 22/MySQL. The
@@ -40,8 +40,14 @@ the user. This checklist distinguishes implemented code from external acceptance
   Spring DI beans (controllers/services). Exceptions: `JwtService` (dummy hash
   init) and `EmailService` (`@Value` on a constructor parameter) — see
   [ARCHITECTURE.md — Lombok constructors](ARCHITECTURE.md#lombok-constructors--rule-and-exceptions).
-  JPA entities keep explicit no-arg constructors; ordinary getters/setters do
-  not require Lombok.
+  JPA entities use Lombok `@Getter`/`@Setter`/`@NoArgsConstructor` (not `@Data`);
+  `id`/`version` omit setters via `@Setter(AccessLevel.NONE)`.
+- Domain failures use typed `ApiException` subclasses mapped by
+  `GlobalExceptionHandler` to Problem Details — see
+  [ARCHITECTURE.md — Custom API exceptions](ARCHITECTURE.md#custom-api-exceptions).
+  Those exception classes do not use Lombok getters/setters (immutable, almost
+  no fields) — see
+  [Why exception classes do not use Lombok](ARCHITECTURE.md#why-exception-classes-do-not-use-lombok).
 - PUT replaces editable fields; project membership and task labels are ID sets.
   Status is manually editable. Deletion guards require attachment/task cleanup.
 - Authentication uses Spring Security's JWT support rather than the example's JJWT.

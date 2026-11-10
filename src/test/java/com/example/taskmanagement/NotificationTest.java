@@ -28,9 +28,9 @@ class NotificationTest extends ApiTestSupport {
         verify(mail, timeout(5000)).send(any(SimpleMailMessage.class));
         clearInvocations(mail);
         var body = taskBody(project, assignee.id(), List.of());
-        json(200, "PUT", "/api/tasks/" + task, editor.token(), body);
+        json(200, "PUT", "/tasks/" + task, editor.token(), body);
         org.mockito.Mockito.verifyNoInteractions(mail);
-        long label = json(201, "POST", "/api/labels", owner.token(),
+        long label = json(201, "POST", "/labels", owner.token(),
                 Map.of("name", "notify-" + owner.name(), "color", "#123456")).get("id").asLong();
         var edits = List.<Map.Entry<String, Object>>of(Map.entry("name", "Renamed task"),
                 Map.entry("description", "Updated description"), Map.entry("status", "IN_PROGRESS"),
@@ -38,7 +38,7 @@ class NotificationTest extends ApiTestSupport {
                 Map.entry("labelIds", List.of(label)));
         for (var edit : edits) {
             body.put(edit.getKey(), edit.getValue());
-            json(200, "PUT", "/api/tasks/" + task, editor.token(), body);
+            json(200, "PUT", "/tasks/" + task, editor.token(), body);
             var sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
             verify(mail, timeout(5000).times(2)).send(sent.capture());
             assertThat(sent.getAllValues()).extracting(message -> message.getTo()[0])
@@ -58,25 +58,25 @@ class NotificationTest extends ApiTestSupport {
         clearInvocations(mail);
         var body = taskBody(project, owner.id(), List.of());
         body.put("status", "IN_PROGRESS");
-        json(200, "PUT", "/api/tasks/" + task, editor.token(), body);
+        json(200, "PUT", "/tasks/" + task, editor.token(), body);
         var sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mail, timeout(5000)).send(sent.capture());
         assertThat(sent.getValue().getTo()).containsExactly(owner.name() + "@example.test");
         clearInvocations(mail);
         body.put("priority", "HIGH");
-        json(200, "PUT", "/api/tasks/" + task, owner.token(), body);
+        json(200, "PUT", "/tasks/" + task, owner.token(), body);
         org.mockito.Mockito.verifyNoInteractions(mail);
         body.put("priority", "LOW");
         transactions.executeWithoutResult(status -> {
             try {
-                json(200, "PUT", "/api/tasks/" + task, editor.token(), body);
+                json(200, "PUT", "/tasks/" + task, editor.token(), body);
             } catch (Exception failure) {
                 throw new IllegalStateException(failure);
             }
             status.setRollbackOnly();
         });
         org.mockito.Mockito.verifyNoInteractions(mail);
-        assertThat(json(200, "GET", "/api/tasks/" + task, owner.token(), null).get("priority").asText())
+        assertThat(json(200, "GET", "/tasks/" + task, owner.token(), null).get("priority").asText())
                 .isEqualTo("HIGH");
     }
 
@@ -90,7 +90,7 @@ class NotificationTest extends ApiTestSupport {
         long task = task(owner, project, previous.id());
         verify(mail, timeout(5000)).send(any(SimpleMailMessage.class));
         clearInvocations(mail);
-        json(200, "PUT", "/api/tasks/" + task, editor.token(), taskBody(project, next.id(), List.of()));
+        json(200, "PUT", "/tasks/" + task, editor.token(), taskBody(project, next.id(), List.of()));
         var sent = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mail, timeout(5000).times(2)).send(sent.capture());
         assertThat(sent.getAllValues()).extracting(message -> message.getTo()[0])
@@ -117,12 +117,12 @@ class NotificationTest extends ApiTestSupport {
         assertThat(sent.getValue().getTo()).containsExactly(member.name() + "@example.test");
         assertThat(sent.getValue().getSubject()).isEqualTo("Task assigned");
         clearInvocations(mail);
-        json(201, "POST", "/api/comments", owner.token(), Map.of("taskId", task, "text", "Please review"));
+        json(201, "POST", "/comments", owner.token(), Map.of("taskId", task, "text", "Please review"));
         verify(mail, timeout(5000)).send(sent.capture());
         assertThat(sent.getValue().getSubject()).isEqualTo("New task comment");
         clearInvocations(mail);
-        json(200, "PUT", "/api/tasks/" + task, owner.token(), taskBody(project, member.id(), List.of()));
-        json(201, "POST", "/api/comments", member.token(), Map.of("taskId", task, "text", "My own comment"));
+        json(200, "PUT", "/tasks/" + task, owner.token(), taskBody(project, member.id(), List.of()));
+        json(201, "POST", "/comments", member.token(), Map.of("taskId", task, "text", "My own comment"));
         org.mockito.Mockito.verifyNoInteractions(mail);
     }
 
@@ -133,15 +133,15 @@ class NotificationTest extends ApiTestSupport {
         for (String date : List.of("2030-02-09", "2030-02-10", "2030-02-11", "2030-02-12")) {
             var body = taskBody(project, owner.id(), List.of());
             body.put("dueDate", date);
-            json(201, "POST", "/api/tasks", owner.token(), body);
+            json(201, "POST", "/tasks", owner.token(), body);
         }
         var completed = taskBody(project, owner.id(), List.of());
         completed.put("dueDate", "2030-02-10");
         completed.put("status", "COMPLETED");
-        json(201, "POST", "/api/tasks", owner.token(), completed);
+        json(201, "POST", "/tasks", owner.token(), completed);
         var unassigned = taskBody(project, null, List.of());
         unassigned.put("dueDate", "2030-02-10");
-        json(201, "POST", "/api/tasks", owner.token(), unassigned);
+        json(201, "POST", "/tasks", owner.token(), unassigned);
         verify(mail, timeout(5000).times(5)).send(any(SimpleMailMessage.class));
         clearInvocations(mail);
         reminders.remind();
@@ -166,6 +166,6 @@ class NotificationTest extends ApiTestSupport {
         var owner = account();
         long task = task(owner, project(owner), owner.id());
         verify(mail, timeout(5000)).send(any(SimpleMailMessage.class));
-        assertThat(json(200, "GET", "/api/tasks/" + task, owner.token(), null).get("id").asLong()).isEqualTo(task);
+        assertThat(json(200, "GET", "/tasks/" + task, owner.token(), null).get("id").asLong()).isEqualTo(task);
     }
 }

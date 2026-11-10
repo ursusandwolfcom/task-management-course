@@ -55,13 +55,13 @@ After startup, verify the local application without creating fixture accounts:
 
 ```powershell
 docker compose --env-file .env.course ps
-Invoke-RestMethod http://127.0.0.1:8081/actuator/health
-(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8081/swagger-ui/index.html).StatusCode
+Invoke-RestMethod http://127.0.0.1:8081/api/actuator/health
+(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8081/api/swagger-ui/index.html).StatusCode
 ```
 
 Health should report UP and Swagger should return 200. The health check includes
 the database, but deliberately excludes Dropbox and SMTP. Protected routes such
-as /users/me must return 401 without a token. Mailpit is available at
+as /users/me (under the /api context path) must return 401 without a token. Mailpit is available at
 http://127.0.0.1:8026. These checks leave business data unchanged.
 
 A placeholder Dropbox token permits startup for core API evaluation, but does

@@ -43,7 +43,7 @@ class JpaRelationshipsTest extends ApiTestSupport {
         var member = account();
         long projectId = project(owner, member);
         long labelId = label(owner, "lazy");
-        long taskId = json(201, "POST", "/api/tasks", owner.token(),
+        long taskId = json(201, "POST", "/tasks", owner.token(),
                 taskBody(projectId, member.id(), List.of(labelId))).get("id").asLong();
         var loaded = factory.getPersistenceUnitUtil();
         Task entity;
@@ -81,7 +81,7 @@ class JpaRelationshipsTest extends ApiTestSupport {
                 project(owner, member);
             }
             long labelId = label(owner, "page-" + index);
-            json(201, "POST", "/api/tasks", owner.token(), taskBody(projectId, null, List.of(labelId)));
+            json(201, "POST", "/tasks", owner.token(), taskBody(projectId, null, List.of(labelId)));
         }
         var statistics = factory.unwrap(SessionFactory.class).getStatistics();
         boolean wasEnabled = statistics.isStatisticsEnabled();
@@ -123,7 +123,7 @@ class JpaRelationshipsTest extends ApiTestSupport {
         for (long assigneeId : List.of(owner.id(), member.id())) {
             var body = taskBody(projectId, assigneeId, List.of());
             body.put("dueDate", "2030-02-10");
-            createdTasks.add(json(201, "POST", "/api/tasks", owner.token(), body).get("id").asLong());
+            createdTasks.add(json(201, "POST", "/tasks", owner.token(), body).get("id").asLong());
         }
         var statistics = factory.unwrap(SessionFactory.class).getStatistics();
         boolean wasEnabled = statistics.isStatisticsEnabled();
@@ -139,9 +139,9 @@ class JpaRelationshipsTest extends ApiTestSupport {
             statistics.setStatisticsEnabled(wasEnabled);
             statistics.clear();
             for (long id : createdTasks) {
-                assertThat(call("DELETE", "/api/tasks/" + id, owner.token(), null).getStatus()).isEqualTo(204);
+                assertThat(call("DELETE", "/tasks/" + id, owner.token(), null).getStatus()).isEqualTo(204);
             }
-            assertThat(call("DELETE", "/api/projects/" + projectId, owner.token(), null).getStatus()).isEqualTo(204);
+            assertThat(call("DELETE", "/projects/" + projectId, owner.token(), null).getStatus()).isEqualTo(204);
         }
     }
 
@@ -151,12 +151,12 @@ class JpaRelationshipsTest extends ApiTestSupport {
         var member = account();
         long projectId = project(owner, member);
         long labelId = label(owner, "shared");
-        long taskId = json(201, "POST", "/api/tasks", owner.token(),
+        long taskId = json(201, "POST", "/tasks", owner.token(),
                 taskBody(projectId, null, List.of(labelId))).get("id").asLong();
-        json(201, "POST", "/api/comments", member.token(), Map.of("taskId", taskId, "text", "Discussion"));
-        assertThat(call("DELETE", "/api/tasks/" + taskId, owner.token(), null).getStatus()).isEqualTo(204);
-        assertThat(call("DELETE", "/api/projects/" + projectId, owner.token(), null).getStatus()).isEqualTo(204);
-        var label = json(200, "PUT", "/api/labels/" + labelId, owner.token(),
+        json(201, "POST", "/comments", member.token(), Map.of("taskId", taskId, "text", "Discussion"));
+        assertThat(call("DELETE", "/tasks/" + taskId, owner.token(), null).getStatus()).isEqualTo(204);
+        assertThat(call("DELETE", "/projects/" + projectId, owner.token(), null).getStatus()).isEqualTo(204);
+        var label = json(200, "PUT", "/labels/" + labelId, owner.token(),
                 Map.of("name", "retained-" + owner.name(), "color", "#123456"));
         assertThat(label.get("id").asLong()).isEqualTo(labelId);
         assertThat(users.existsById(owner.id())).isTrue();
@@ -164,7 +164,7 @@ class JpaRelationshipsTest extends ApiTestSupport {
     }
 
     private long label(Account owner, String suffix) throws Exception {
-        return json(201, "POST", "/api/labels", owner.token(),
+        return json(201, "POST", "/labels", owner.token(),
                 Map.of("name", owner.name() + "-" + suffix, "color", "#123456")).get("id").asLong();
     }
 }

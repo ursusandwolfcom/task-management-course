@@ -40,7 +40,7 @@ import org.springframework.web.multipart.MultipartFile;
 @SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/attachments")
+@RequestMapping("/attachments")
 public class AttachmentController {
     private final AttachmentService attachments;
 
@@ -166,7 +166,7 @@ public class AttachmentController {
                             schema = @Schema(type = "string", format = "binary")))
             @RequestParam MultipartFile file) throws IOException {
         var result = attachments.upload(Long.valueOf(jwt.getSubject()), taskId, file);
-        return ResponseEntity.created(URI.create("/api/attachments/" + result.id() + "/download")).body(result);
+        return ResponseEntity.created(URI.create("/attachments/" + result.id() + "/download")).body(result);
     }
 
     @DeleteMapping("/{id}")

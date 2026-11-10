@@ -12,6 +12,11 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+    @ExceptionHandler(ApiException.class)
+    public ProblemDetail apiFailure(ApiException exception) {
+        return ProblemDetail.forStatusAndDetail(exception.getStatus(), exception.getMessage());
+    }
+
     @ExceptionHandler(PropertyReferenceException.class)
     public ProblemDetail invalidSort(PropertyReferenceException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Unknown sort field");

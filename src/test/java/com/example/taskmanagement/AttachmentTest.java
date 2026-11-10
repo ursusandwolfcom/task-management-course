@@ -26,19 +26,19 @@ class AttachmentTest extends ApiTestSupport {
                 "id:large-4", "id:large-5", "id:large-6");
         var file = new MockMultipartFile("file", "large.bin", "application/octet-stream", new byte[] {1});
         for (int index = 1; index <= 6; index++) {
-            assertThat(mvc.perform(multipart("/api/attachments").file(file).param("taskId", "" + task)
+            assertThat(mvc.perform(multipart("/attachments").file(file).param("taskId", "" + task)
                     .header("Authorization", "Bearer " + owner.token())).andReturn().getResponse().getStatus())
                     .isEqualTo(201);
             when(dropbox.download("id:large-" + index)).thenReturn(new byte[5 * 1024 * 1024]);
         }
-        assertThat(call("GET", "/api/attachments?taskId=" + task, owner.token(), null).getStatus()).isEqualTo(413);
+        assertThat(call("GET", "/attachments?taskId=" + task, owner.token(), null).getStatus()).isEqualTo(413);
         when(dropbox.download("id:large-6")).thenThrow(new java.io.IOException("private transfer failure"));
-        var failed = call("GET", "/api/attachments?taskId=" + task, owner.token(), null);
+        var failed = call("GET", "/attachments?taskId=" + task, owner.token(), null);
         assertThat(failed.getStatus()).isEqualTo(502);
         assertThat(failed.getContentType()).doesNotContain("zip");
         assertThat(failed.getContentAsString()).doesNotContain("private transfer failure");
         long emptyTask = task(owner, project, null);
-        var empty = call("GET", "/api/attachments?taskId=" + emptyTask, owner.token(), null);
+        var empty = call("GET", "/attachments?taskId=" + emptyTask, owner.token(), null);
         assertThat(empty.getStatus()).isEqualTo(200);
         try (var zip = new ZipInputStream(new ByteArrayInputStream(empty.getContentAsByteArray()))) {
             assertThat(zip.getNextEntry()).isNull();
@@ -53,13 +53,13 @@ class AttachmentTest extends ApiTestSupport {
         when(dropbox.upload(eq("same.txt"), any())).thenReturn("id:zip-first", "id:zip-second");
         var file = new MockMultipartFile("file", "same.txt", "text/plain", new byte[] {1});
         for (int index = 0; index < 2; index++) {
-            assertThat(mvc.perform(multipart("/api/attachments").file(file).param("taskId", "" + task)
+            assertThat(mvc.perform(multipart("/attachments").file(file).param("taskId", "" + task)
                     .header("Authorization", "Bearer " + owner.token())).andReturn().getResponse().getStatus())
                     .isEqualTo(201);
         }
         when(dropbox.download("id:zip-first")).thenReturn(new byte[] {1, 2});
         when(dropbox.download("id:zip-second")).thenReturn(new byte[] {3, 4});
-        var response = call("GET", "/api/attachments?taskId=" + task + "&sort=id,asc", owner.token(), null);
+        var response = call("GET", "/attachments?taskId=" + task + "&sort=id,asc", owner.token(), null);
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(response.getContentType()).isEqualTo("application/zip");
         try (var zip = new ZipInputStream(new ByteArrayInputStream(response.getContentAsByteArray()))) {
@@ -70,7 +70,7 @@ class AttachmentTest extends ApiTestSupport {
             assertThat(zip.readAllBytes()).containsExactly((byte) 3, (byte) 4);
             assertThat(zip.getNextEntry()).isNull();
         }
-        var paged = call("GET", "/api/attachments?taskId=" + task + "&size=1&page=1&sort=id,asc",
+        var paged = call("GET", "/attachments?taskId=" + task + "&size=1&page=1&sort=id,asc",
                 owner.token(), null);
         try (var zip = new ZipInputStream(new ByteArrayInputStream(paged.getContentAsByteArray()))) {
             assertThat(zip.getNextEntry()).isNotNull();
@@ -78,7 +78,7 @@ class AttachmentTest extends ApiTestSupport {
             assertThat(zip.getNextEntry()).isNull();
         }
         org.mockito.Mockito.clearInvocations(dropbox);
-        assertThat(call("GET", "/api/attachments?taskId=" + task, outsider.token(), null).getStatus())
+        assertThat(call("GET", "/attachments?taskId=" + task, outsider.token(), null).getStatus())
                 .isEqualTo(404);
         org.mockito.Mockito.verifyNoInteractions(dropbox);
     }
@@ -89,25 +89,25 @@ class AttachmentTest extends ApiTestSupport {
         long task = task(owner, project(owner), null);
         when(dropbox.upload(eq("notes.txt"), any())).thenReturn("id:course-file");
         var file = new MockMultipartFile("file", "notes.txt", "text/plain", "hello".getBytes(StandardCharsets.UTF_8));
-        var response = mvc.perform(multipart("/api/attachments").file(file).param("taskId", "" + task)
+        var response = mvc.perform(multipart("/attachments").file(file).param("taskId", "" + task)
                 .header("Authorization", "Bearer " + owner.token())).andReturn().getResponse();
         assertThat(response.getStatus()).as(response.getContentAsString()).isEqualTo(201);
         long id = mapper.readTree(response.getContentAsString()).get("id").asLong();
-        var attachment = json(200, "GET", "/api/attachments/metadata?taskId=" + task, owner.token(), null)
+        var attachment = json(200, "GET", "/attachments/metadata?taskId=" + task, owner.token(), null)
                 .get("content").get(0);
         assertThat(attachment.get("dropboxFileId").asText()).isEqualTo("id:course-file");
         assertThat(attachment.get("uploadDate").asText()).isEqualTo("2030-02-10T09:00:00");
         when(dropbox.download("id:course-file")).thenReturn(file.getBytes());
-        var download = call("GET", "/api/attachments/" + id + "/download", owner.token(), null);
+        var download = call("GET", "/attachments/" + id + "/download", owner.token(), null);
         assertThat(download.getStatus()).isEqualTo(200);
         assertThat(download.getContentAsByteArray()).isEqualTo(file.getBytes());
         assertThat(download.getHeader("Content-Disposition")).contains("attachment", "notes.txt");
-        assertThat(call("DELETE", "/api/tasks/" + task, owner.token(), null).getStatus()).isEqualTo(409);
-        assertThat(call("DELETE", "/api/attachments/" + id, owner.token(), null).getStatus()).isEqualTo(204);
+        assertThat(call("DELETE", "/tasks/" + task, owner.token(), null).getStatus()).isEqualTo(409);
+        assertThat(call("DELETE", "/attachments/" + id, owner.token(), null).getStatus()).isEqualTo(204);
         verify(dropbox).delete("id:course-file");
-        assertThat(call("GET", "/api/attachments/" + id + "/download", owner.token(), null)
+        assertThat(call("GET", "/attachments/" + id + "/download", owner.token(), null)
                 .getStatus()).isEqualTo(404);
-        assertThat(call("DELETE", "/api/tasks/" + task, owner.token(), null).getStatus()).isEqualTo(204);
+        assertThat(call("DELETE", "/tasks/" + task, owner.token(), null).getStatus()).isEqualTo(204);
     }
 
     @Test
@@ -117,20 +117,20 @@ class AttachmentTest extends ApiTestSupport {
         long task = task(owner, project(owner), null);
         when(dropbox.upload(eq("safe.txt"), any())).thenReturn("id:failure-test");
         var file = new MockMultipartFile("file", "safe.txt", "text/plain", new byte[] {1, 2});
-        var response = mvc.perform(multipart("/api/attachments").file(file).param("taskId", "" + task)
+        var response = mvc.perform(multipart("/attachments").file(file).param("taskId", "" + task)
                 .header("Authorization", "Bearer " + owner.token())).andReturn().getResponse();
         assertThat(response.getStatus()).isEqualTo(201);
         long id = mapper.readTree(response.getContentAsString()).get("id").asLong();
-        assertThat(call("GET", "/api/attachments/" + id + "/download", outsider.token(), null)
+        assertThat(call("GET", "/attachments/" + id + "/download", outsider.token(), null)
                 .getStatus()).isEqualTo(404);
-        assertThat(call("DELETE", "/api/attachments/" + id, outsider.token(), null).getStatus()).isEqualTo(404);
+        assertThat(call("DELETE", "/attachments/" + id, outsider.token(), null).getStatus()).isEqualTo(404);
         doThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Dropbox operation failed"))
                 .when(dropbox).delete("id:failure-test");
-        assertThat(call("DELETE", "/api/attachments/" + id, owner.token(), null).getStatus()).isEqualTo(502);
-        assertThat(json(200, "GET", "/api/attachments/metadata?taskId=" + task, owner.token(), null)
+        assertThat(call("DELETE", "/attachments/" + id, owner.token(), null).getStatus()).isEqualTo(502);
+        assertThat(json(200, "GET", "/attachments/metadata?taskId=" + task, owner.token(), null)
                 .get("content").size()).isEqualTo(1);
         when(dropbox.download("id:failure-test")).thenThrow(new java.io.IOException("sensitive provider detail"));
-        var failed = call("GET", "/api/attachments/" + id + "/download", owner.token(), null);
+        var failed = call("GET", "/attachments/" + id + "/download", owner.token(), null);
         assertThat(failed.getStatus()).isEqualTo(502);
         assertThat(failed.getContentAsString()).doesNotContain("sensitive provider detail");
     }
@@ -143,15 +143,15 @@ class AttachmentTest extends ApiTestSupport {
         for (String name : new String[] {"../secret.txt", "..", "bad\\name.txt", "bad\nname.txt",
                 "bad\u007fname.txt", "bad\u0085name.txt", ""}) {
             var file = new MockMultipartFile("file", name, "text/plain", new byte[] {1});
-            var result = mvc.perform(multipart("/api/attachments").file(file).param("taskId", "" + task)
+            var result = mvc.perform(multipart("/attachments").file(file).param("taskId", "" + task)
                     .header("Authorization", "Bearer " + owner.token())).andReturn().getResponse();
             assertThat(result.getStatus()).as(name).isEqualTo(400);
         }
         var empty = new MockMultipartFile("file", "empty.txt", "text/plain", new byte[0]);
-        assertThat(mvc.perform(multipart("/api/attachments").file(empty).param("taskId", "" + task)
+        assertThat(mvc.perform(multipart("/attachments").file(empty).param("taskId", "" + task)
                 .header("Authorization", "Bearer " + owner.token())).andReturn().getResponse().getStatus())
                 .isEqualTo(400);
-        assertThat(mvc.perform(multipart("/api/attachments").file(empty).param("taskId", "" + task)
+        assertThat(mvc.perform(multipart("/attachments").file(empty).param("taskId", "" + task)
                 .header("Authorization", "Bearer " + outsider.token())).andReturn().getResponse().getStatus())
                 .isEqualTo(404);
         org.mockito.Mockito.verifyNoInteractions(dropbox);

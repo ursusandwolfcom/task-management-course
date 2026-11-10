@@ -16,16 +16,18 @@ import com.dropbox.core.v2.files.DeleteError;
 import com.dropbox.core.v2.files.DeleteErrorException;
 import com.dropbox.core.v2.files.FileMetadata;
 import com.dropbox.core.v2.files.LookupError;
+import com.example.taskmanagement.exception.BadGatewayException;
 import com.example.taskmanagement.service.DropboxService;
 import com.example.taskmanagement.service.DropboxService.FileRevision;
+import com.example.taskmanagement.service.DropboxServiceImpl;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 class DropboxServiceTest {
     private final DbxClientV2 client = mock(DbxClientV2.class, RETURNS_DEEP_STUBS);
-    private final DropboxService service = new DropboxService(client);
+    private final DropboxService service = new DropboxServiceImpl(client);
 
     @Test
     void deletedFileRestorationUsesOriginalPathRevisionAndChecksFileIdentity() throws Exception {
@@ -41,10 +43,10 @@ class DropboxServiceTest {
         service.restore(revision);
         verify(client.files()).restore("/course-tasks/original.txt", "original-revision");
         when(metadata.getId()).thenReturn("id:unexpected");
-        assertThatThrownBy(() -> service.restore(revision)).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> service.restore(revision)).isInstanceOf(BadGatewayException.class);
         when(client.files().getMetadata("id:private-failure")).thenThrow(new DbxException("secret"));
         assertThatThrownBy(() -> service.revision("id:private-failure"))
-                .isInstanceOf(ResponseStatusException.class).hasMessageNotContaining("secret");
+                .isInstanceOf(BadGatewayException.class).hasMessageNotContaining("secret");
     }
 
     @Test
@@ -54,10 +56,11 @@ class DropboxServiceTest {
         assertThatCode(() -> service.delete("id:gone")).doesNotThrowAnyException();
         when(client.files().deleteV2("id:locked")).thenThrow(new DeleteErrorException("delete", "request", null,
                 DeleteError.pathLookup(LookupError.LOCKED)));
-        assertThatThrownBy(() -> service.delete("id:locked")).isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining("502");
+        assertThatThrownBy(() -> service.delete("id:locked")).isInstanceOf(BadGatewayException.class)
+                .extracting(ex -> ((BadGatewayException) ex).getStatus())
+                .isEqualTo(HttpStatus.BAD_GATEWAY);
         when(client.files().deleteV2("id:failed")).thenThrow(new DbxException("private provider detail"));
-        assertThatThrownBy(() -> service.delete("id:failed")).isInstanceOf(ResponseStatusException.class)
+        assertThatThrownBy(() -> service.delete("id:failed")).isInstanceOf(BadGatewayException.class)
                 .hasMessageNotContaining("private provider detail");
     }
 
@@ -73,6 +76,6 @@ class DropboxServiceTest {
         assertThat(service.download("id:uploaded")).containsExactly((byte) 1, (byte) 2);
         when(client.files().download("id:oversize").getInputStream())
                 .thenReturn(new ByteArrayInputStream(new byte[5 * 1024 * 1024 + 1]));
-        assertThatThrownBy(() -> service.download("id:oversize")).isInstanceOf(ResponseStatusException.class);
+        assertThatThrownBy(() -> service.download("id:oversize")).isInstanceOf(BadGatewayException.class);
     }
 }

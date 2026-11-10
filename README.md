@@ -51,9 +51,9 @@ keep the code easy to follow. Swagger provides the interactive browser interface
 
 | Service | Default address |
 |---|---|
-| Swagger UI | http://127.0.0.1:8081/swagger-ui/index.html |
-| OpenAPI JSON | http://127.0.0.1:8081/v3/api-docs |
-| Database health | http://127.0.0.1:8081/actuator/health |
+| Swagger UI | http://127.0.0.1:8081/api/swagger-ui/index.html |
+| OpenAPI JSON | http://127.0.0.1:8081/api/v3/api-docs |
+| Database health | http://127.0.0.1:8081/api/actuator/health |
 | Local email inbox | http://127.0.0.1:8026 |
 
 The application requires a **new, empty course database**. Compose uses a separate
@@ -62,7 +62,7 @@ the application does not import the existing product `.env`.
 
 ## First request
 
-In Swagger, execute `POST /api/auth/register`:
+In Swagger, execute `POST /auth/register`:
 
 ```json
 {
@@ -74,7 +74,7 @@ In Swagger, execute `POST /api/auth/register`:
 }
 ```
 
-Then call `POST /api/auth/login`:
+Then call `POST /auth/login`:
 
 ```json
 { "identifier": "alice", "password": "choose-a-strong-password" }
@@ -139,7 +139,7 @@ are substituted in automated tests; live integration acceptance is a separate st
 
 - [Changelog](CHANGELOG.md): recent fixes, delivery changes and verification evidence.
 - [API reference](documentation/API.md): routes, example bodies, filters and access rules.
-- [Architecture](documentation/ARCHITECTURE.md): package map, data relationships, MapStruct, Lombok constructor exceptions, OpenAPI special cases and transactions.
+- [Architecture](documentation/ARCHITECTURE.md): package map, data relationships, MapStruct, custom API exceptions, Lombok constructor exceptions, OpenAPI special cases and transactions.
 - [Spring lifecycle](documentation/SPRING_LIFECYCLE.md): singleton choices, initialization dependencies and AOP.
 - [Code review](documentation/CODE_REVIEW.md): fixed findings, Hibernate ownership and measured fetch plans.
 - [Operations](documentation/OPERATIONS.md): configuration, local execution, testing and troubleshooting.

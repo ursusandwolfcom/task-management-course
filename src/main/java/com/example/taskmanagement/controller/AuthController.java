@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
         description = "Public account registration and JWT login. No bearer token is required.")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/auth")
 public class AuthController {
     private final UserService users;
     private final JwtService tokens;

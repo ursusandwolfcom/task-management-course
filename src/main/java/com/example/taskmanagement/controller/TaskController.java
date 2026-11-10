@@ -41,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/tasks")
+@RequestMapping("/tasks")
 public class TaskController {
     private final TaskService service;
 
@@ -121,7 +121,7 @@ public class TaskController {
             @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody TaskRequest request) {
         var result = service.create(Long.valueOf(jwt.getSubject()), request);
-        return ResponseEntity.created(URI.create("/api/tasks/" + result.id())).body(result);
+        return ResponseEntity.created(URI.create("/tasks/" + result.id())).body(result);
     }
 
     @PutMapping("/{id}")

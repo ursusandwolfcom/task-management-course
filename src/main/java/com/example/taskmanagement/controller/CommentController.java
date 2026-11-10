@@ -38,7 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/comments")
+@RequestMapping("/comments")
 public class CommentController {
     private final CommentService comments;
 
@@ -90,7 +90,7 @@ public class CommentController {
             @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CommentRequest request) {
         var result = comments.create(Long.valueOf(jwt.getSubject()), request);
-        return ResponseEntity.created(URI.create("/api/comments?taskId=" + result.taskId())).body(result);
+        return ResponseEntity.created(URI.create("/comments?taskId=" + result.taskId())).body(result);
     }
 
     @DeleteMapping("/{id}")

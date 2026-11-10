@@ -71,10 +71,10 @@ abstract class ApiTestSupport {
 
     protected Account account() throws Exception {
         String name = "u" + UUID.randomUUID().toString().replace("-", "");
-        var registered = json(201, "POST", "/api/auth/register", null,
+        var registered = json(201, "POST", "/auth/register", null,
                 Map.of("username", name, "password", "password123", "email", name + "@example.test",
                         "firstName", "Test", "lastName", "User"));
-        String token = json(200, "POST", "/api/auth/login", null,
+        String token = json(200, "POST", "/auth/login", null,
                 Map.of("identifier", name, "password", "password123")).get("accessToken").asText();
         return new Account(registered.get("id").asLong(), name, token);
     }
@@ -85,7 +85,7 @@ abstract class ApiTestSupport {
     }
 
     protected long project(Account owner, Account... members) throws Exception {
-        return json(201, "POST", "/api/projects", owner.token(),
+        return json(201, "POST", "/projects", owner.token(),
                 projectBody(java.util.Arrays.stream(members).map(Account::id).toList())).get("id").asLong();
     }
 
@@ -102,7 +102,7 @@ abstract class ApiTestSupport {
     }
 
     protected long task(Account actor, long project, Long assignee) throws Exception {
-        return json(201, "POST", "/api/tasks", actor.token(), taskBody(project, assignee, List.of()))
+        return json(201, "POST", "/tasks", actor.token(), taskBody(project, assignee, List.of()))
                 .get("id").asLong();
     }
 }

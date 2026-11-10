@@ -4,11 +4,29 @@
 
 ### Changed
 
+- Replace the raw SQL Liquibase script with YAML changelog change types in
+  `001-course-schema.yaml` (still changeset `course-001`).
+- Extract service interfaces (`UserService`, `ProjectService`, `TaskService`,
+  `CommentService`, `LabelService`, `AttachmentService`, `DropboxService`,
+  `EmailService`, `DeadlineReminderService`) with Spring `@Service`
+  `*ServiceImpl` implementations; controllers depend on the interfaces.
+- Replace `ResponseStatusException` with typed `ApiException` subclasses
+  (`BadRequest`, `Unauthorized`, `Forbidden`, `NotFound`, `Conflict`,
+  `PayloadTooLarge`, `BadGateway`) handled by `GlobalExceptionHandler` as
+  Problem Details. See
+  [ARCHITECTURE.md — Custom API exceptions](documentation/ARCHITECTURE.md#custom-api-exceptions).
+- Set `server.servlet.context-path=/api` and keep servlet paths without an
+  `/api` prefix in controllers, `Location` headers, security matchers and tests.
+  The container adds `/api` only at the HTTP boundary (Swagger/health browser
+  URLs). Tests clear context-path so MockMvc calls `/auth`, `/users`, `/tasks`.
 - Use Lombok `@RequiredArgsConstructor` for Spring DI constructors on controllers
-  and services. JwtService and EmailService keep handwritten constructors
-  (timing hash init and `@Value` parameter). lombok-mapstruct-binding is configured
-  for annotation processing with MapStruct. Rationale:
+  and `*ServiceImpl` classes. JwtService and EmailServiceImpl keep handwritten
+  constructors (timing hash init and `@Value` parameter).
+  lombok-mapstruct-binding is configured for annotation processing with MapStruct.
+  Rationale:
   [ARCHITECTURE.md — Lombok constructors](documentation/ARCHITECTURE.md#lombok-constructors--rule-and-exceptions).
+- JPA entities use Lombok `@Getter`/`@Setter`/`@NoArgsConstructor` instead of
+  handwritten accessors; `@Data` is avoided. `id`/`version` have no setters.
 
 ### Documentation
 

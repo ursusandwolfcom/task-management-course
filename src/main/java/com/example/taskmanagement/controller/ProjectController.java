@@ -40,7 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/projects")
+@RequestMapping("/projects")
 public class ProjectController {
     private final ProjectService service;
 
@@ -104,7 +104,7 @@ public class ProjectController {
             @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody ProjectRequest request) {
         var result = service.create(Long.valueOf(jwt.getSubject()), request);
-        return ResponseEntity.created(URI.create("/api/projects/" + result.id())).body(result);
+        return ResponseEntity.created(URI.create("/projects/" + result.id())).body(result);
     }
 
     @PutMapping("/{id}")
