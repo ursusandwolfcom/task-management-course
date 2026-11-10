@@ -115,6 +115,11 @@ injected `Jwt` parameter and declaring multipart/binary file schemas — are
 explained in the [OpenAPI special cases](documentation/ARCHITECTURE.md#openapi--swagger-special-cases)
 section.
 
+Lombok `@RequiredArgsConstructor` replaces handwritten DI constructors on
+controllers and most services. Why `JwtService` and `EmailService` stay manual is
+documented under
+[Lombok constructors](documentation/ARCHITECTURE.md#lombok-constructors--rule-and-exceptions).
+
 ## Build and verification
 
 ```powershell
@@ -134,7 +139,7 @@ are substituted in automated tests; live integration acceptance is a separate st
 
 - [Changelog](CHANGELOG.md): recent fixes, delivery changes and verification evidence.
 - [API reference](documentation/API.md): routes, example bodies, filters and access rules.
-- [Architecture](documentation/ARCHITECTURE.md): package map, data relationships, MapStruct, OpenAPI special cases and transactions.
+- [Architecture](documentation/ARCHITECTURE.md): package map, data relationships, MapStruct, Lombok constructor exceptions, OpenAPI special cases and transactions.
 - [Spring lifecycle](documentation/SPRING_LIFECYCLE.md): singleton choices, initialization dependencies and AOP.
 - [Code review](documentation/CODE_REVIEW.md): fixed findings, Hibernate ownership and measured fetch plans.
 - [Operations](documentation/OPERATIONS.md): configuration, local execution, testing and troubleshooting.

@@ -7,7 +7,8 @@
 - Use Lombok `@RequiredArgsConstructor` for Spring DI constructors on controllers
   and services. JwtService and EmailService keep handwritten constructors
   (timing hash init and `@Value` parameter). lombok-mapstruct-binding is configured
-  for annotation processing with MapStruct.
+  for annotation processing with MapStruct. Rationale:
+  [ARCHITECTURE.md — Lombok constructors](documentation/ARCHITECTURE.md#lombok-constructors--rule-and-exceptions).
 
 ### Documentation
 

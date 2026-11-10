@@ -37,8 +37,11 @@ the user. This checklist distinguishes implemented code from external acceptance
   original assignment does not prescribe those exact versions/vendors.
 - Roles use an enum on User rather than a separate Role entity. DTO conversion
   uses MapStruct. Lombok `@RequiredArgsConstructor` generates constructors for
-  Spring DI beans (controllers/services). JPA entities keep explicit no-arg
-  constructors; ordinary getters/setters do not require Lombok.
+  Spring DI beans (controllers/services). Exceptions: `JwtService` (dummy hash
+  init) and `EmailService` (`@Value` on a constructor parameter) — see
+  [ARCHITECTURE.md — Lombok constructors](ARCHITECTURE.md#lombok-constructors--rule-and-exceptions).
+  JPA entities keep explicit no-arg constructors; ordinary getters/setters do
+  not require Lombok.
 - PUT replaces editable fields; project membership and task labels are ID sets.
   Status is manually editable. Deletion guards require attachment/task cleanup.
 - Authentication uses Spring Security's JWT support rather than the example's JJWT.

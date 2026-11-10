@@ -90,6 +90,74 @@ If an IDE cannot resolve the generated bean, reimport the Maven project, enable
 annotation processing and run the Maven compile goal. The configuration follows
 [MapStruct's official Maven setup](https://mapstruct.org/documentation/stable/reference/html/#_apache_maven).
 
+## Lombok constructors — rule and exceptions
+
+Spring DI beans use constructor injection. Where the constructor only assigns
+`final` dependencies, the project uses Lombok
+[`@RequiredArgsConstructor`](https://projectlombok.org/features/RequiredArgsConstructor)
+instead of a handwritten constructor. Controllers and most services follow that
+pattern. Maven runs Lombok before MapStruct via `lombok-mapstruct-binding`.
+
+**Do not** put Lombok on JPA entities for this purpose. Entities keep an explicit
+no-arg constructor (and ordinary accessors) so Hibernate can instantiate and
+hydrate them. That is unrelated to Spring DI.
+
+Two Spring beans intentionally keep handwritten constructors.
+
+### 1. `JwtService` — constructor body is not a pure assignment
+
+```java
+public JwtService(UserRepository users, PasswordEncoder passwords,
+        JwtEncoder encoder, Clock clock) {
+    this.users = users;
+    this.passwords = passwords;
+    this.encoder = encoder;
+    this.clock = clock;
+    this.dummyHash = passwords.encode("invalid-login-timing-placeholder");
+}
+```
+
+`@RequiredArgsConstructor` would only write `this.field = field` for each
+`final` dependency. Here `dummyHash` is derived during construction: a BCrypt
+hash used on failed logins so password checks take a similar amount of time
+whether the username exists or not (timing side-channel mitigation).
+
+That value depends on the injected `PasswordEncoder` and must be computed once
+when the bean is created. Lombok cannot express “call `passwords.encode(...)` in
+the generated constructor”, so a handwritten constructor remains the clear,
+reviewable choice. Refactors that move the hash into a lazy getter or
+`@PostConstruct` would change when the work runs; they are not required for
+correctness and would obscure the security intent.
+
+See [JwtService](../src/main/java/com/example/taskmanagement/security/JwtService.java).
+
+### 2. `EmailService` — `@Value` must stay on the constructor parameter
+
+```java
+public EmailService(JavaMailSender sender, @Value("${notification.from}") String from) {
+    this.sender = sender;
+    this.from = from;
+}
+```
+
+Spring resolves `@Value` (and similar annotations) on **injection points** it
+sees: constructor parameters, setter parameters or fields it injects itself.
+`@RequiredArgsConstructor` generates a constructor **without** copying
+parameter annotations from fields. Putting `@Value` on a `final` field while
+letting Lombok generate the constructor does not reliably place `@Value` on the
+generated parameter, so the `from` address would not be injected as intended.
+
+Keeping an explicit constructor with `@Value` on the `from` parameter preserves
+constructor injection and makes the configuration key visible at the injection
+point. Alternatives (`@ConfigurationProperties`, a dedicated settings bean) are
+valid but heavier than this one-line property.
+
+See [EmailService](../src/main/java/com/example/taskmanagement/service/EmailService.java).
+
+**Rule of thumb:** use `@RequiredArgsConstructor` when the constructor would be
+only field assignments; keep a handwritten constructor when it contains logic or
+parameter annotations Spring must process.
+
 ## OpenAPI / Swagger special cases
 
 `ApplicationConfig` registers a global JWT `bearerAuth` scheme and applies it to
