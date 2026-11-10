@@ -9,6 +9,7 @@ import com.example.taskmanagement.model.Task;
 import com.example.taskmanagement.repository.CommentRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+@RequiredArgsConstructor
 @Service
 @Transactional
 public class CommentService {
@@ -26,16 +28,6 @@ public class CommentService {
     private final ResponseMapper mapper;
     private final ApplicationEventPublisher events;
     private final Clock clock;
-
-    public CommentService(CommentRepository comments, TaskService tasks, UserService users,
-            ResponseMapper mapper, ApplicationEventPublisher events, Clock clock) {
-        this.comments = comments;
-        this.tasks = tasks;
-        this.users = users;
-        this.mapper = mapper;
-        this.events = events;
-        this.clock = clock;
-    }
 
     public CommentResponse create(Long actorId, CommentRequest request) {
         Task task = tasks.writable(actorId, request.taskId());

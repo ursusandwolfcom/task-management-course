@@ -4,23 +4,21 @@ import com.dropbox.core.DbxException;
 import com.dropbox.core.v2.DbxClientV2;
 import com.dropbox.core.v2.files.DeleteErrorException;
 import com.dropbox.core.v2.files.FileMetadata;
-import java.io.IOException;
 import java.io.InputStream;
+import java.io.IOException;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+@RequiredArgsConstructor
 @Service
 public class DropboxService {
     public record FileRevision(String id, String path, String revision) {
     }
 
     private final DbxClientV2 client;
-
-    public DropboxService(DbxClientV2 client) {
-        this.client = client;
-    }
 
     public String upload(String filename, InputStream input) throws IOException {
         try {

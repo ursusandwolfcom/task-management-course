@@ -36,7 +36,9 @@ the user. This checklist distinguishes implemented code from external acceptance
 - Java 21/PostgreSQL are retained instead of the example's Java 22/MySQL. The
   original assignment does not prescribe those exact versions/vendors.
 - Roles use an enum on User rather than a separate Role entity. DTO conversion
-  uses MapStruct; ordinary JPA getters/setters do not require Lombok.
+  uses MapStruct. Lombok `@RequiredArgsConstructor` generates constructors for
+  Spring DI beans (controllers/services). JPA entities keep explicit no-arg
+  constructors; ordinary getters/setters do not require Lombok.
 - PUT replaces editable fields; project membership and task labels are ID sets.
   Status is manually editable. Deletion guards require attachment/task cleanup.
 - Authentication uses Spring Security's JWT support rather than the example's JJWT.

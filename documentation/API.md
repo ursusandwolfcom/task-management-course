@@ -130,7 +130,8 @@ A PUT with unchanged values sends no email; the previous assignee is not notifie
 The server derives author and UTC timestamp. A comment emails the assignee unless
 the assignee authored it. Text is required and limited to 4,000 characters.
 
-**5. Upload a file** — use the multipart form in Swagger, or run:
+**5. Upload a file** — use the multipart form in Swagger (binary part; see
+[OpenAPI special cases](ARCHITECTURE.md#openapi--swagger-special-cases)), or run:
 
 ```powershell
 curl.exe -X POST "http://127.0.0.1:8081/api/attachments?taskId=1" `

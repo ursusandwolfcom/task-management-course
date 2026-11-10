@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Changed
+
+- Use Lombok `@RequiredArgsConstructor` for Spring DI constructors on controllers
+  and services. JwtService and EmailService keep handwritten constructors
+  (timing hash init and `@Value` parameter). lombok-mapstruct-binding is configured
+  for annotation processing with MapStruct.
+
+### Documentation
+
+- Documented OpenAPI/Swagger controller annotations, including the two special
+  cases: `@Parameter(hidden = true)` for injected `Jwt`, and
+  `schema type=string, format=binary` for multipart upload and file/ZIP download.
+  Details: [ARCHITECTURE.md — OpenAPI / Swagger special cases](documentation/ARCHITECTURE.md#openapi--swagger-special-cases).
+
 ### Fixed
 
 - Clean up newly uploaded Dropbox files when the database transaction rolls back,

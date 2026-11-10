@@ -11,6 +11,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -23,6 +24,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+@RequiredArgsConstructor
 @Service
 @Transactional
 public class AttachmentService {
@@ -36,15 +38,6 @@ public class AttachmentService {
     private final DropboxService dropbox;
     private final ResponseMapper mapper;
     private final Clock clock;
-
-    public AttachmentService(AttachmentRepository attachments, TaskService tasks, DropboxService dropbox,
-            ResponseMapper mapper, Clock clock) {
-        this.attachments = attachments;
-        this.tasks = tasks;
-        this.dropbox = dropbox;
-        this.mapper = mapper;
-        this.clock = clock;
-    }
 
     @Transactional(rollbackFor = IOException.class)
     public AttachmentResponse upload(Long actorId, Long taskId, MultipartFile file) throws IOException {

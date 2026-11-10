@@ -10,24 +10,20 @@ import com.example.taskmanagement.model.User;
 import com.example.taskmanagement.repository.UserRepository;
 import com.example.taskmanagement.security.PasswordPolicy;
 import java.util.Locale;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+@RequiredArgsConstructor
 @Service
 @Transactional
 public class UserService {
     private final UserRepository users;
     private final PasswordEncoder passwords;
     private final ResponseMapper mapper;
-
-    public UserService(UserRepository users, PasswordEncoder passwords, ResponseMapper mapper) {
-        this.users = users;
-        this.passwords = passwords;
-        this.mapper = mapper;
-    }
 
     public UserResponse register(RegisterRequest request) {
         if (PasswordPolicy.exceedsBcryptLimit(request.password())) {

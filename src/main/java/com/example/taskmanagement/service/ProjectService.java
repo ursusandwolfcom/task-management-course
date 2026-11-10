@@ -14,6 +14,7 @@ import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.HashSet;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+@RequiredArgsConstructor
 @Service
 @Transactional
 public class ProjectService {
@@ -28,14 +30,6 @@ public class ProjectService {
     private final TaskRepository tasks;
     private final UserService users;
     private final ResponseMapper mapper;
-
-    public ProjectService(ProjectRepository projects, TaskRepository tasks,
-            UserService users, ResponseMapper mapper) {
-        this.projects = projects;
-        this.tasks = tasks;
-        this.users = users;
-        this.mapper = mapper;
-    }
 
     @Transactional(readOnly = true)
     public Project accessible(Long actorId, Long id, boolean ownerOnly) {

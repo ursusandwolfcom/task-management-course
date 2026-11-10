@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+@RequiredArgsConstructor
 @Service
 @Transactional
 public class TaskService {
@@ -37,19 +39,6 @@ public class TaskService {
     private final AttachmentRepository attachments;
     private final ResponseMapper mapper;
     private final ApplicationEventPublisher events;
-
-    public TaskService(TaskRepository tasks, ProjectService projects, UserService users,
-            LabelRepository labels, CommentRepository comments, AttachmentRepository attachments,
-            ResponseMapper mapper, ApplicationEventPublisher events) {
-        this.tasks = tasks;
-        this.projects = projects;
-        this.users = users;
-        this.labels = labels;
-        this.comments = comments;
-        this.attachments = attachments;
-        this.mapper = mapper;
-        this.events = events;
-    }
 
     @Transactional(readOnly = true)
     public Task accessible(Long actorId, Long id) {

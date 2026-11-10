@@ -90,6 +90,71 @@ If an IDE cannot resolve the generated bean, reimport the Maven project, enable
 annotation processing and run the Maven compile goal. The configuration follows
 [MapStruct's official Maven setup](https://mapstruct.org/documentation/stable/reference/html/#_apache_maven).
 
+## OpenAPI / Swagger special cases
+
+`ApplicationConfig` registers a global JWT `bearerAuth` scheme and applies it to
+every operation by default. Controllers add `@Tag`, `@Operation`, `@ApiResponses`
+and `@Parameter` so Swagger UI shows purpose, auth and real HTTP statuses.
+
+Two annotation patterns are easy to get wrong. They are documented here because
+they affect how reviewers and students use Swagger, not only how the JSON looks.
+
+### 1. Hide the JWT method argument
+
+Authenticated handlers take `@AuthenticationPrincipal Jwt jwt`. That argument is
+injected by Spring Security after the `Authorization: Bearer …` header is
+validated. It is **not** part of the public HTTP contract: clients never paste a
+JWT object into a request body or query field.
+
+Without `@Parameter(hidden = true)`, springdoc may render an extra Swagger input
+named like `jwt`. Operators then try to fill it manually and confuse it with the
+**Authorize** dialog. Hide the principal everywhere it appears:
+
+```java
+public UserResponse profile(
+        @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    return users.profile(Long.valueOf(jwt.getSubject()));
+}
+```
+
+Rule of thumb: hide framework types the client does not send (`Jwt`,
+`Principal`, servlet request/response). Keep visible parameters for path, query,
+header and body fields that belong to the API.
+
+Public auth endpoints do the opposite for **security**, not for parameters:
+`@Operation(security = {})` clears the global bearer requirement so register/login
+do not show a lock in Swagger.
+
+### 2. Describe files as `string` + `format = binary`
+
+JSON request/response models use ordinary schemas (`UserResponse`, `TaskRequest`).
+File upload and download are raw bytes. OpenAPI represents binary payloads as
+`type: string` with `format: binary`.
+
+**Upload** uses `multipart/form-data`. The file part must be annotated so Swagger
+shows a **Choose file** control instead of a JSON text box:
+
+```java
+@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+public ResponseEntity<AttachmentResponse> upload(
+        @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
+        @RequestParam Long taskId,
+        @Parameter(description = "File to upload (1 B to 5 MB)", required = true,
+                content = @Content(
+                        mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE,
+                        schema = @Schema(type = "string", format = "binary")))
+        @RequestParam MultipartFile file) { ... }
+```
+
+**Download / ZIP** declare the same binary schema on the success `@ApiResponse`
+content (`application/octet-stream` or `application/zip`). Otherwise the UI
+implies a JSON string body while the server streams file bytes.
+
+See [AttachmentController](../src/main/java/com/example/taskmanagement/controller/AttachmentController.java)
+for upload, single-file download and paginated ZIP responses, and
+[AuthController](../src/main/java/com/example/taskmanagement/controller/AuthController.java)
+for public operations with empty security.
+
 ## Follow a task assignment
 
 1. Spring Security validates the JWT and loads the current user role from the database.

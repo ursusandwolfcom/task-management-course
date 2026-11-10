@@ -6,6 +6,7 @@ import com.example.taskmanagement.mapper.ResponseMapper;
 import com.example.taskmanagement.model.Label;
 import com.example.taskmanagement.repository.LabelRepository;
 import com.example.taskmanagement.repository.TaskRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -13,18 +14,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+@RequiredArgsConstructor
 @Service
 @Transactional
 public class LabelService {
     private final LabelRepository labels;
     private final TaskRepository tasks;
     private final ResponseMapper mapper;
-
-    public LabelService(LabelRepository labels, TaskRepository tasks, ResponseMapper mapper) {
-        this.labels = labels;
-        this.tasks = tasks;
-        this.mapper = mapper;
-    }
 
     @Transactional(readOnly = true)
     public Page<LabelResponse> list(Pageable pageable) {
