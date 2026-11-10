@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Add per-controller MockMvc integration tests and Mockito unit tests for
+  service implementations.
 - Replace the raw SQL Liquibase script with YAML changelog change types in
   `001-course-schema.yaml` (still changeset `course-001`).
 - Extract service interfaces (`UserService`, `ProjectService`, `TaskService`,

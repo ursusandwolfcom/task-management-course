@@ -29,7 +29,7 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-abstract class ApiTestSupport {
+public abstract class ApiTestSupport {
     protected record Account(long id, String name, String token) {
     }
 
