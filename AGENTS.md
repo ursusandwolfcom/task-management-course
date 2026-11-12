@@ -35,7 +35,12 @@ Preserve Java 21, UTC, Liquibase tracking in public and ddl-auto=validate. Keep
 BCrypt, authorization, validation, pagination and meaningful tests. Run Maven Wrapper
 clean verify, maintain the 60% line coverage gate and Checkstyle, and require green
 PostgreSQL/container CI on the exact published SHA. Never bypass branch protection,
-force-push shared history or call mocks live-provider acceptance.
+force-push shared history or call mocks live-provider acceptance. Integration /
+`@SpringBootTest` tests must not use Mockito collaborator mocks (`@MockitoBean`,
+`when`/`verify` on Dropbox/mail/clock); use in-memory or recording test doubles as
+Spring beans. Mockito remains allowed only in focused unit tests. Prefer one
+positive and one negative case per controller endpoint (IT) and per public
+service method (unit).
 
 Preserve untracked/ignored user files. Local docs stay ignored; update
 docs/CHANGELOG.md and docs/CHANGELOG_UML.puml with matching iteration IDs and honest

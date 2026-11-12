@@ -42,11 +42,10 @@ the user. This checklist distinguishes implemented code from external acceptance
   [ARCHITECTURE.md — Lombok constructors](ARCHITECTURE.md#lombok-constructors--rule-and-exceptions).
   JPA entities use Lombok `@Getter`/`@Setter`/`@NoArgsConstructor` (not `@Data`);
   `id`/`version` omit setters via `@Setter(AccessLevel.NONE)`.
-- Domain failures use typed `ApiException` subclasses mapped by
-  `GlobalExceptionHandler` to Problem Details — see
-  [ARCHITECTURE.md — Custom API exceptions](ARCHITECTURE.md#custom-api-exceptions).
-  Those exception classes do not use Lombok getters/setters (immutable, almost
-  no fields) — see
+- Domain failures are `RuntimeException` subclasses with a message only (no
+  `HttpStatus` in the type); `GlobalExceptionHandler` maps each class to HTTP —
+  see [ARCHITECTURE.md — Custom domain exceptions](ARCHITECTURE.md#custom-domain-exceptions).
+  Exception classes do not use Lombok getters/setters — see
   [Why exception classes do not use Lombok](ARCHITECTURE.md#why-exception-classes-do-not-use-lombok).
 - PUT replaces editable fields; project membership and task labels are ID sets.
   Status is manually editable. Deletion guards require attachment/task cleanup.

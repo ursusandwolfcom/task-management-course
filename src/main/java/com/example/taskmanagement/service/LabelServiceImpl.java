@@ -1,6 +1,6 @@
 package com.example.taskmanagement.service;
 
-import com.example.taskmanagement.exception.NotFoundException;
+import com.example.taskmanagement.exception.EntityNotFoundException;
 import com.example.taskmanagement.dto.LabelRequest;
 import com.example.taskmanagement.dto.LabelResponse;
 import com.example.taskmanagement.mapper.ResponseMapper;
@@ -48,6 +48,6 @@ public class LabelServiceImpl implements LabelService {
 
     private Label found(Long id) {
         return labels.findById(id).orElseThrow(() ->
-                new NotFoundException("Label not found"));
+                new EntityNotFoundException("Label not found"));
     }
 }

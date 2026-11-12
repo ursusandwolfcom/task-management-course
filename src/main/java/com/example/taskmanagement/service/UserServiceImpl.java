@@ -1,9 +1,9 @@
 package com.example.taskmanagement.service;
 
-import com.example.taskmanagement.exception.ConflictException;
-import com.example.taskmanagement.exception.NotFoundException;
-import com.example.taskmanagement.exception.ForbiddenException;
-import com.example.taskmanagement.exception.BadRequestException;
+import com.example.taskmanagement.exception.ResourceConflictException;
+import com.example.taskmanagement.exception.EntityNotFoundException;
+import com.example.taskmanagement.exception.InsufficientPrivilegesException;
+import com.example.taskmanagement.exception.InvalidBusinessDataException;
 import com.example.taskmanagement.dto.ProfilePatch;
 import com.example.taskmanagement.dto.ProfileRequest;
 import com.example.taskmanagement.dto.RegisterRequest;
@@ -29,12 +29,12 @@ public class UserServiceImpl implements UserService {
 
     public UserResponse register(RegisterRequest request) {
         if (PasswordPolicy.exceedsBcryptLimit(request.password())) {
-            throw new BadRequestException("Password must not exceed 72 UTF-8 bytes");
+            throw new InvalidBusinessDataException("Password must not exceed 72 UTF-8 bytes");
         }
         String email = request.email().trim().toLowerCase(Locale.ROOT);
         String username = request.username().toLowerCase(Locale.ROOT);
         if (users.existsByEmailIgnoreCase(email) || users.existsByUsernameIgnoreCase(username)) {
-            throw new ConflictException("Username or email already registered");
+            throw new ResourceConflictException("Username or email already registered");
         }
         var user = new User();
         user.setUsername(username);
@@ -48,7 +48,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public User getUser(Long id) {
         return users.findById(id).orElseThrow(() ->
-                new NotFoundException("User not found"));
+                new EntityNotFoundException("User not found"));
     }
 
     @Transactional(readOnly = true)
@@ -65,7 +65,7 @@ public class UserServiceImpl implements UserService {
         if (request.email() != null) {
             String email = request.email().trim().toLowerCase(Locale.ROOT);
             if (!email.equalsIgnoreCase(user.getEmail()) && users.existsByEmailIgnoreCase(email)) {
-                throw new ConflictException("Email already registered");
+                throw new ResourceConflictException("Email already registered");
             }
             user.setEmail(email);
         }
@@ -80,7 +80,7 @@ public class UserServiceImpl implements UserService {
 
     public UserResponse changeRole(Long actorId, Long id, Role role) {
         if (getUser(actorId).getRole() != Role.ADMIN) {
-            throw new ForbiddenException("Administrator required");
+            throw new InsufficientPrivilegesException("Administrator required");
         }
         User user = getUser(id);
         user.setRole(role);

@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Integration tests use in-memory Dropbox and recording mail beans instead of
+  Mockito collaborator mocks; unit tests may still use Mockito.
 - Add per-controller MockMvc integration tests and Mockito unit tests for
   service implementations.
 - Replace the raw SQL Liquibase script with YAML changelog change types in
@@ -12,11 +14,15 @@
   `CommentService`, `LabelService`, `AttachmentService`, `DropboxService`,
   `EmailService`, `DeadlineReminderService`) with Spring `@Service`
   `*ServiceImpl` implementations; controllers depend on the interfaces.
-- Replace `ResponseStatusException` with typed `ApiException` subclasses
-  (`BadRequest`, `Unauthorized`, `Forbidden`, `NotFound`, `Conflict`,
-  `PayloadTooLarge`, `BadGateway`) handled by `GlobalExceptionHandler` as
-  Problem Details. See
-  [ARCHITECTURE.md — Custom API exceptions](documentation/ARCHITECTURE.md#custom-api-exceptions).
+- Replace `ResponseStatusException` with domain `RuntimeException` subclasses
+  (`EntityNotFoundException`, `InvalidBusinessDataException`,
+  `InvalidCredentialsException`, `InsufficientPrivilegesException`,
+  `ResourceConflictException`, `AttachmentLimitExceededException`,
+  `ExternalStorageException`). Exceptions carry a message only; HTTP status is
+  mapped per type in `GlobalExceptionHandler` (Problem Details). See
+  [ARCHITECTURE.md — Custom domain exceptions](documentation/ARCHITECTURE.md#custom-domain-exceptions).
+- Expand controller ITs and service unit tests to positive + negative cases per
+  public method; IT doubles live under `support/` (no Mockito in SpringBootTest).
 - Set `server.servlet.context-path=/api` and keep servlet paths without an
   `/api` prefix in controllers, `Location` headers, security matchers and tests.
   The container adds `/api` only at the HTTP boundary (Swagger/health browser

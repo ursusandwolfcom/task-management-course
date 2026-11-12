@@ -1,7 +1,7 @@
 package com.example.taskmanagement.service;
 
-import com.example.taskmanagement.exception.NotFoundException;
-import com.example.taskmanagement.exception.ForbiddenException;
+import com.example.taskmanagement.exception.EntityNotFoundException;
+import com.example.taskmanagement.exception.InsufficientPrivilegesException;
 import com.example.taskmanagement.dto.CommentRequest;
 import com.example.taskmanagement.dto.CommentResponse;
 import com.example.taskmanagement.mapper.ResponseMapper;
@@ -52,11 +52,11 @@ public class CommentServiceImpl implements CommentService {
 
     public void delete(Long actorId, Long id) {
         Comment comment = comments.findById(id).orElseThrow(() ->
-                new NotFoundException("Comment not found"));
+                new EntityNotFoundException("Comment not found"));
         Task task = tasks.writable(actorId, comment.getTask().getId());
         if (!comment.getUser().getId().equals(actorId) && !task.getProject().getOwner().getId().equals(actorId)
                 && users.getUser(actorId).getRole() != Role.ADMIN) {
-            throw new ForbiddenException("Comment author or project owner required");
+            throw new InsufficientPrivilegesException("Comment author or project owner required");
         }
         comments.delete(comment);
     }

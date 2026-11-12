@@ -1,8 +1,8 @@
 package com.example.taskmanagement.service;
 
-import com.example.taskmanagement.exception.ConflictException;
-import com.example.taskmanagement.exception.NotFoundException;
-import com.example.taskmanagement.exception.BadRequestException;
+import com.example.taskmanagement.exception.ResourceConflictException;
+import com.example.taskmanagement.exception.EntityNotFoundException;
+import com.example.taskmanagement.exception.InvalidBusinessDataException;
 import com.example.taskmanagement.dto.TaskFilter;
 import com.example.taskmanagement.dto.TaskRequest;
 import com.example.taskmanagement.dto.TaskResponse;
@@ -63,7 +63,7 @@ public class TaskServiceImpl implements TaskService {
     public Page<TaskResponse> list(Long actorId, Long projectId, TaskFilter filter, Pageable pageable) {
         projects.accessible(actorId, projectId, false);
         if (filter.dueFrom() != null && filter.dueTo() != null && filter.dueFrom().isAfter(filter.dueTo())) {
-            throw new BadRequestException("Invalid due date range");
+            throw new InvalidBusinessDataException("Invalid due date range");
         }
         return tasks.findAll((root, query, builder) -> {
             var predicates = new ArrayList<Predicate>();
@@ -109,7 +109,7 @@ public class TaskServiceImpl implements TaskService {
     public TaskResponse update(Long actorId, Long id, TaskRequest request) {
         Task task = writable(actorId, id);
         if (!task.getProject().getId().equals(request.projectId())) {
-            throw new BadRequestException("Task project cannot change");
+            throw new InvalidBusinessDataException("Task project cannot change");
         }
         Long previousAssignee = task.getAssignee() == null ? null : task.getAssignee().getId();
         boolean changed = changed(task, request);
@@ -124,7 +124,7 @@ public class TaskServiceImpl implements TaskService {
         Task task = found(id);
         projects.lock(actorId, task.getProject().getId(), true);
         if (attachments.existsByTaskId(id)) {
-            throw new ConflictException("Delete Dropbox attachments first");
+            throw new ResourceConflictException("Delete Dropbox attachments first");
         }
         comments.deleteByTaskId(id);
         tasks.delete(task);
@@ -132,7 +132,7 @@ public class TaskServiceImpl implements TaskService {
 
     private Task found(Long id) {
         return tasks.findById(id).orElseThrow(() ->
-                new NotFoundException("Task not found"));
+                new EntityNotFoundException("Task not found"));
     }
 
     private void apply(Task task, TaskRequest request) {
@@ -140,11 +140,11 @@ public class TaskServiceImpl implements TaskService {
         Project project = task.getProject();
         if (assignee != null && !project.getOwner().getId().equals(assignee.getId())
                 && project.getMembers().stream().noneMatch(user -> user.getId().equals(assignee.getId()))) {
-            throw new ConflictException("Assignee must belong to project");
+            throw new ResourceConflictException("Assignee must belong to project");
         }
         var selectedLabels = labels.findAllById(request.labelIds());
         if (selectedLabels.size() != request.labelIds().size()) {
-            throw new NotFoundException("Label not found");
+            throw new EntityNotFoundException("Label not found");
         }
         task.setName(request.name().trim());
         task.setDescription(request.description());

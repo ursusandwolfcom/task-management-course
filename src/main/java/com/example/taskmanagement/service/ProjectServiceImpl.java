@@ -1,9 +1,9 @@
 package com.example.taskmanagement.service;
 
-import com.example.taskmanagement.exception.ConflictException;
-import com.example.taskmanagement.exception.NotFoundException;
-import com.example.taskmanagement.exception.ForbiddenException;
-import com.example.taskmanagement.exception.BadRequestException;
+import com.example.taskmanagement.exception.ResourceConflictException;
+import com.example.taskmanagement.exception.EntityNotFoundException;
+import com.example.taskmanagement.exception.InsufficientPrivilegesException;
+import com.example.taskmanagement.exception.InvalidBusinessDataException;
 import com.example.taskmanagement.dto.ProjectFilter;
 import com.example.taskmanagement.dto.ProjectRequest;
 import com.example.taskmanagement.dto.ProjectResponse;
@@ -37,16 +37,16 @@ public class ProjectServiceImpl implements ProjectService {
     public Project accessible(Long actorId, Long id, boolean ownerOnly) {
         User actor = users.getUser(actorId);
         Project project = projects.findById(id).orElseThrow(() ->
-                new NotFoundException("Project not found"));
+                new EntityNotFoundException("Project not found"));
         boolean owner = project.getOwner().getId().equals(actorId);
         if (owner || actor.getRole() == Role.ADMIN) {
             return project;
         }
         if (project.getMembers().stream().noneMatch(user -> user.getId().equals(actorId))) {
-            throw new NotFoundException("Project not found");
+            throw new EntityNotFoundException("Project not found");
         }
         if (ownerOnly) {
-            throw new ForbiddenException("Project owner required");
+            throw new InsufficientPrivilegesException("Project owner required");
         }
         return project;
     }
@@ -54,7 +54,7 @@ public class ProjectServiceImpl implements ProjectService {
     @Transactional(readOnly = true)
     public Page<ProjectResponse> list(Long actorId, ProjectFilter filter, Pageable pageable) {
         if (filter.startFrom() != null && filter.endTo() != null && filter.startFrom().isAfter(filter.endTo())) {
-            throw new BadRequestException("Invalid project date range");
+            throw new InvalidBusinessDataException("Invalid project date range");
         }
         boolean admin = users.getUser(actorId).getRole() == Role.ADMIN;
         return projects.findAll((root, query, builder) -> {
@@ -83,7 +83,7 @@ public class ProjectServiceImpl implements ProjectService {
 
     public Project lock(Long actorId, Long id, boolean ownerOnly) {
         projects.findForUpdate(id).orElseThrow(() ->
-                new NotFoundException("Project not found"));
+                new EntityNotFoundException("Project not found"));
         return accessible(actorId, id, ownerOnly);
     }
 
@@ -105,7 +105,7 @@ public class ProjectServiceImpl implements ProjectService {
             if (!request.memberIds().contains(member.getId())
                     && !project.getOwner().getId().equals(member.getId())
                     && tasks.existsByProjectIdAndAssigneeId(id, member.getId())) {
-                throw new ConflictException("Reassign tasks before removing a member");
+                throw new ResourceConflictException("Reassign tasks before removing a member");
             }
         }
         apply(project, request);
@@ -115,7 +115,7 @@ public class ProjectServiceImpl implements ProjectService {
     public void delete(Long actorId, Long id) {
         Project project = lock(actorId, id, true);
         if (tasks.existsByProjectId(id)) {
-            throw new ConflictException("Delete project tasks first");
+            throw new ResourceConflictException("Delete project tasks first");
         }
         projects.delete(project);
     }
@@ -123,7 +123,7 @@ public class ProjectServiceImpl implements ProjectService {
     private void apply(Project project, ProjectRequest request) {
         if (request.startDate() != null && request.endDate() != null
                 && request.endDate().isBefore(request.startDate())) {
-            throw new BadRequestException("End date precedes start date");
+            throw new InvalidBusinessDataException("End date precedes start date");
         }
         var members = new HashSet<User>();
         for (Long id : request.memberIds()) {

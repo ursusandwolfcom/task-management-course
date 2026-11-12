@@ -2,11 +2,6 @@ package com.example.taskmanagement;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 
 import com.example.taskmanagement.dto.ProjectRequest;
@@ -62,13 +57,12 @@ class ConcurrencyTest extends ApiTestSupport {
         var member = account();
         long project = project(owner, member);
         long task = task(owner, project, null);
-        when(dropbox.upload(eq("race.txt"), any())).thenReturn("id:revocation-race");
         var file = new MockMultipartFile("file", "race.txt", "text/plain", new byte[] {1});
         var upload = mvc.perform(multipart("/attachments").file(file).param("taskId", "" + task)
                 .header("Authorization", "Bearer " + owner.token())).andReturn().getResponse();
         assertThat(upload.getStatus()).isEqualTo(201);
         long id = mapper.readTree(upload.getContentAsString()).get("id").asLong();
-        clearInvocations(dropbox);
+        dropbox.clearOperationLog();
         var executor = Executors.newSingleThreadExecutor();
         try {
             var pending = transactions.execute(status -> {
@@ -86,7 +80,7 @@ class ConcurrencyTest extends ApiTestSupport {
             });
             assertThat(pending).isNotNull();
             var result = pending.get(10, TimeUnit.SECONDS);
-            verifyNoInteractions(dropbox);
+            assertThat(dropbox.operationCount()).isZero();
             assertThat(result.getStatus()).as(result.getContentAsString()).isEqualTo(404);
             assertThat(json(200, "GET", "/attachments/metadata?taskId=" + task, owner.token(), null)
                     .get("content").size()).isEqualTo(1);

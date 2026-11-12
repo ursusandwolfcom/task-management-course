@@ -1,8 +1,8 @@
 package com.example.taskmanagement.service;
 
-import com.example.taskmanagement.exception.PayloadTooLargeException;
-import com.example.taskmanagement.exception.NotFoundException;
-import com.example.taskmanagement.exception.BadRequestException;
+import com.example.taskmanagement.exception.AttachmentLimitExceededException;
+import com.example.taskmanagement.exception.EntityNotFoundException;
+import com.example.taskmanagement.exception.InvalidBusinessDataException;
 import com.example.taskmanagement.dto.AttachmentResponse;
 import com.example.taskmanagement.mapper.ResponseMapper;
 import com.example.taskmanagement.model.Attachment;
@@ -46,7 +46,7 @@ public class AttachmentServiceImpl implements AttachmentService {
                 || filename.equals(".") || filename.equals("..")
                 || filename.chars().anyMatch(value -> Character.isISOControl(value) || "\\/:".indexOf(value) >= 0)
                 || file.isEmpty() || file.getSize() > AttachmentLimits.MAX_BYTES) {
-            throw new BadRequestException("Invalid filename or file size (1 B to 5 MB)");
+            throw new InvalidBusinessDataException("Invalid filename or file size (1 B to 5 MB)");
         }
         String externalId;
         try (var input = file.getInputStream()) {
@@ -78,7 +78,7 @@ public class AttachmentServiceImpl implements AttachmentService {
                 byte[] content = dropbox.download(attachment.getDropboxFileId());
                 totalBytes += content.length;
                 if (totalBytes > MAX_ARCHIVE_BYTES) {
-                    throw new PayloadTooLargeException("Archive exceeds 25 MB; request a smaller page size");
+                    throw new AttachmentLimitExceededException("Archive exceeds 25 MB; request a smaller page size");
                 }
                 // Stable ID directories avoid duplicate names and preserve original filenames.
                 zip.putNextEntry(new ZipEntry(attachment.getId() + "/" + attachment.getFilename()));
@@ -131,6 +131,6 @@ public class AttachmentServiceImpl implements AttachmentService {
 
     private Attachment found(Long id) {
         return attachments.findById(id).orElseThrow(() ->
-                new NotFoundException("Attachment not found"));
+                new EntityNotFoundException("Attachment not found"));
     }
 }

@@ -2,7 +2,7 @@ package com.example.taskmanagement.security;
 
 import com.example.taskmanagement.dto.LoginRequest;
 import com.example.taskmanagement.dto.TokenResponse;
-import com.example.taskmanagement.exception.UnauthorizedException;
+import com.example.taskmanagement.exception.InvalidCredentialsException;
 import com.example.taskmanagement.repository.UserRepository;
 import java.time.Clock;
 import java.time.Duration;
@@ -53,7 +53,7 @@ public class JwtService {
     @Transactional(readOnly = true)
     public TokenResponse login(LoginRequest request) {
         if (PasswordPolicy.exceedsBcryptLimit(request.password())) {
-            throw new UnauthorizedException("Invalid credentials");
+            throw new InvalidCredentialsException("Invalid credentials");
         }
         String identifier = request.identifier().trim().toLowerCase(Locale.ROOT);
         var found = identifier.contains("@") ? users.findByEmailIgnoreCase(identifier)
@@ -61,7 +61,7 @@ public class JwtService {
         String hash = found.isPresent() ? found.get().getPasswordHash() : dummyHash;
         boolean matches = passwords.matches(request.password(), hash);
         if (found.isEmpty() || !matches) {
-            throw new UnauthorizedException("Invalid credentials");
+            throw new InvalidCredentialsException("Invalid credentials");
         }
         var now = clock.instant();
         var claims = JwtClaimsSet.builder().issuer(ISSUER)

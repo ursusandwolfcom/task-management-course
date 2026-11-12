@@ -1,6 +1,6 @@
 package com.example.taskmanagement.service;
 
-import com.example.taskmanagement.exception.BadGatewayException;
+import com.example.taskmanagement.exception.ExternalStorageException;
 import com.dropbox.core.DbxException;
 import com.dropbox.core.v2.DbxClientV2;
 import com.dropbox.core.v2.files.DeleteErrorException;
@@ -72,7 +72,7 @@ public class DropboxServiceImpl implements DropboxService {
         }
     }
 
-    private BadGatewayException unavailable() {
-        return new BadGatewayException("Dropbox operation failed");
+    private ExternalStorageException unavailable() {
+        return new ExternalStorageException("Dropbox operation failed");
     }
 }

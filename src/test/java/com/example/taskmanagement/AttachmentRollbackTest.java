@@ -3,16 +3,10 @@ package com.example.taskmanagement;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
+import com.example.taskmanagement.dto.AttachmentResponse;
 import com.example.taskmanagement.repository.AttachmentRepository;
 import com.example.taskmanagement.service.AttachmentService;
-import com.example.taskmanagement.service.DropboxService.FileRevision;
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,57 +25,53 @@ class AttachmentRollbackTest extends ApiTestSupport {
     void uploadIsCleanedUpWhenTransactionRollsBackAfterFlush() throws Exception {
         var owner = account();
         long task = task(owner, project(owner), null);
-        when(dropbox.upload(eq("rollback.txt"), any())).thenReturn("id:upload-rollback");
         var file = new MockMultipartFile("file", "rollback.txt", "text/plain", new byte[] {1});
+        var uploaded = new AttachmentResponse[1];
         Long id = transactions.execute(status -> {
-            var saved = upload(owner.id(), task, file);
+            uploaded[0] = upload(owner.id(), task, file);
             status.setRollbackOnly();
-            return saved;
+            return uploaded[0].id();
         });
         assertThat(repository.existsById(id)).isFalse();
-        verify(dropbox).delete("id:upload-rollback");
+        assertThat(dropbox.deletedIds()).contains(uploaded[0].dropboxFileId());
     }
 
     @Test
     void deleteRestoresSameRevisionWhenDatabaseTransactionRollsBack() throws Exception {
         var owner = account();
         long task = task(owner, project(owner), null);
-        when(dropbox.upload(eq("restore.txt"), any())).thenReturn("id:restore-file");
-        var revision = new FileRevision("id:restore-file", "/course-tasks/restore.txt", "revision-1");
-        when(dropbox.revision("id:restore-file")).thenReturn(revision);
-        long id = upload(owner.id(), task,
+        var uploaded = upload(owner.id(), task,
                 new MockMultipartFile("file", "restore.txt", "text/plain", new byte[] {1, 2}));
-        verify(dropbox, never()).delete("id:restore-file");
+        String dropboxId = uploaded.dropboxFileId();
+        assertThat(dropbox.deletedIds()).doesNotContain(dropboxId);
         transactions.executeWithoutResult(status -> {
-            attachments.delete(owner.id(), id);
+            attachments.delete(owner.id(), uploaded.id());
             status.setRollbackOnly();
         });
-        assertThat(repository.existsById(id)).isTrue();
-        verify(dropbox).delete("id:restore-file");
-        verify(dropbox).restore(revision);
-        assertThat(repository.findById(id).orElseThrow().getDropboxFileId()).isEqualTo("id:restore-file");
+        assertThat(repository.existsById(uploaded.id())).isTrue();
+        assertThat(dropbox.deletedIds()).contains(dropboxId);
+        assertThat(dropbox.restoredRevisions()).extracting(revision -> revision.id()).contains(dropboxId);
+        assertThat(repository.findById(uploaded.id()).orElseThrow().getDropboxFileId()).isEqualTo(dropboxId);
     }
 
     @Test
     void cleanupFailureDoesNotReplaceRollbackOrRestoreMetadata() throws Exception {
         var owner = account();
         long task = task(owner, project(owner), null);
-        when(dropbox.upload(eq("failure.txt"), any())).thenReturn("id:cleanup-failure");
-        doThrow(new IllegalStateException("Provider unavailable")).when(dropbox).delete("id:cleanup-failure");
         var file = new MockMultipartFile("file", "failure.txt", "text/plain", new byte[] {1});
         assertThatCode(() -> transactions.executeWithoutResult(status -> {
-            upload(owner.id(), task, file);
+            var saved = upload(owner.id(), task, file);
+            dropbox.failDeleteWith(saved.dropboxFileId(), new IllegalStateException("Provider unavailable"));
             status.setRollbackOnly();
         })).doesNotThrowAnyException();
         assertThat(repository.findByTaskId(task, org.springframework.data.domain.PageRequest.of(0, 20))).isEmpty();
-        verify(dropbox).delete("id:cleanup-failure");
+        assertThat(dropbox.deleteAttempts()).isNotEmpty();
     }
 
     @Test
     void streamCloseFailureRollsBackAndCleansUploadedFile() throws Exception {
         var owner = account();
         long task = task(owner, project(owner), null);
-        when(dropbox.upload(eq("close.txt"), any())).thenReturn("id:close-failure");
         var file = new MockMultipartFile("file", "close.txt", "text/plain", new byte[] {1}) {
             @Override
             public java.io.InputStream getInputStream() {
@@ -94,13 +84,13 @@ class AttachmentRollbackTest extends ApiTestSupport {
             }
         };
         assertThatThrownBy(() -> attachments.upload(owner.id(), task, file)).isInstanceOf(IOException.class);
-        verify(dropbox).delete("id:close-failure");
+        assertThat(dropbox.deletedIds()).isNotEmpty();
         assertThat(repository.findByTaskId(task, org.springframework.data.domain.PageRequest.of(0, 20))).isEmpty();
     }
 
-    private long upload(Long actor, Long task, MockMultipartFile file) {
+    private AttachmentResponse upload(Long actor, Long task, MockMultipartFile file) {
         try {
-            return attachments.upload(actor, task, file).id();
+            return attachments.upload(actor, task, file);
         } catch (IOException failure) {
             throw new IllegalStateException(failure);
         }

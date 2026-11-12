@@ -19,80 +19,55 @@ There are no module ports, planning engines or alternate storage providers.
 | `mapper` | Compile-time entity/DTO transformations | [ResponseMapper](../src/main/java/com/example/taskmanagement/mapper/ResponseMapper.java) |
 | `security` | JWT validation, live roles and BCrypt login | [SecurityConfig](../src/main/java/com/example/taskmanagement/security/SecurityConfig.java) |
 | `config` | UTC clock, Dropbox client, async email and OpenAPI | [ApplicationConfig](../src/main/java/com/example/taskmanagement/config/ApplicationConfig.java) |
-| `exception` | Custom API exceptions and Problem Detail mapping | [GlobalExceptionHandler](../src/main/java/com/example/taskmanagement/exception/GlobalExceptionHandler.java) |
+| `exception` | Domain exceptions and Problem Detail mapping | [GlobalExceptionHandler](../src/main/java/com/example/taskmanagement/exception/GlobalExceptionHandler.java) |
 
-## Custom API exceptions
+## Custom domain exceptions
 
-Services throw typed `ApiException` subclasses instead of Spring's
-`ResponseStatusException`. Each subclass carries an `HttpStatus` and a stable
-message. HTTP clients receive RFC 7807 `ProblemDetail` JSON.
+Services throw **domain** exceptions that extend `RuntimeException` with a
+message only (Mate bookstore style: `EntityNotFoundException`,
+`RegistrationException`). They do **not** carry `HttpStatus`, are **not** named
+after HTTP codes, and replace bare `RuntimeException` /
+`ResponseStatusException`.
 
-| Exception | HTTP status | Typical use |
+| Exception | Mapped HTTP status (in handler) | Typical use |
 |---|---|---|
-| `BadRequestException` | 400 | Validation/business input errors |
-| `UnauthorizedException` | 401 | Invalid login credentials |
-| `ForbiddenException` | 403 | Missing owner/admin rights |
-| `NotFoundException` | 404 | Missing entity for the caller |
-| `ConflictException` | 409 | Unique/state conflicts |
-| `PayloadTooLargeException` | 413 | Attachment ZIP page over 25 MiB |
-| `BadGatewayException` | 502 | Dropbox provider failures |
+| `InvalidBusinessDataException` | 400 | Invalid dates, password policy, filename/project rules |
+| `InvalidCredentialsException` | 401 | Failed login (wrong identifier/password) |
+| `InsufficientPrivilegesException` | 403 | Missing owner/admin/comment-author rights |
+| `EntityNotFoundException` | 404 | Missing user/project/task/label/comment/attachment |
+| `ResourceConflictException` | 409 | Duplicate identity or illegal state (delete/member/assignee) |
+| `AttachmentLimitExceededException` | 413 | Attachment ZIP page over 25 MiB |
+| `ExternalStorageException` | 502 | Dropbox provider failures |
 
 ### Why exception classes do not use Lombok
 
-Handwritten get/set (and Lombok `@Getter`/`@Setter`) are unnecessary on these
-types. They are small immutable failure values, not mutable beans.
-
-| Piece | What it holds | Why Lombok is not needed |
-|---|---|---|
-| `ApiException` | `final HttpStatus status` + message via `RuntimeException` | One field; a single `getStatus()` is clearer than a class-level annotation. Message already has `getMessage()` from the JDK. |
-| Seven subclasses | Only call `super(HttpStatus.…, message)` | No extra fields → nothing to generate getters/setters for. |
-| Setters | — | Status and message must not change after construction; setters would invite mutation of a thrown error. |
-| `@RequiredArgsConstructor` / `@Data` | — | Construction already encodes status in each subclass constructor. `@Data` would add mutable-style `equals`/`hashCode` noise that exceptions should not rely on. |
-
-Optional `@Getter` on `ApiException` alone would only replace the existing
-`getStatus()` method; it adds no clarity here, so the project keeps the explicit
-method. Controllers/services use Lombok for DI and entities; exception types stay
-plain Java.
+They are small immutable failure values: constructor + `getMessage()` from
+`RuntimeException`. No extra fields, no setters, no `@Data`.
 
 ### How `GlobalExceptionHandler` intercepts exceptions
 
 Controllers stay thin: they call services and do not wrap every failure in
-`try/catch`. When a service throws, the exception propagates out of the
-controller method. Spring MVC then looks for an `@ExceptionHandler` that can
-handle that type.
-
-`GlobalExceptionHandler` is a `@RestControllerAdvice` bean (extends
-`ResponseEntityExceptionHandler`). Advice applies to all `@RestController`
-endpoints in the application. Spring registers each `@ExceptionHandler` method
-as a resolver for the declared exception type(s).
+`try/catch`. When a service throws, Spring MVC resolves a matching
+`@ExceptionHandler`. Status codes live **only** in the advice.
 
 Request flow:
 
 1. Filter chain / DispatcherServlet invokes the controller.
-2. The service throws, for example, `new NotFoundException("Task not found")`.
-3. DispatcherServlet does not return a normal body; it asks exception resolvers.
-4. The resolver matches `NotFoundException` to `@ExceptionHandler(ApiException.class)`
-   because every custom domain exception **extends** `ApiException` (subtype match).
-5. `apiFailure` builds `ProblemDetail.forStatusAndDetail(status, message)`.
-6. With `spring.mvc.problemdetails.enabled=true`, the response is
-   `application/problem+json` and the HTTP status comes from the problem's status.
+2. The service throws, for example, `new EntityNotFoundException("Task not found")`.
+3. DispatcherServlet asks exception resolvers.
+4. `@ExceptionHandler(EntityNotFoundException.class)` maps to HTTP 404 Problem Detail.
+5. With `spring.mvc.problemdetails.enabled=true`, the response is
+   `application/problem+json`.
 
 ```java
-@RestControllerAdvice
-public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
-    @ExceptionHandler(ApiException.class)
-    public ProblemDetail apiFailure(ApiException exception) {
-        return ProblemDetail.forStatusAndDetail(
-                exception.getStatus(), exception.getMessage());
-    }
+@ExceptionHandler(EntityNotFoundException.class)
+public ProblemDetail notFound(EntityNotFoundException exception) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
 }
 ```
 
-One handler covers all seven subclasses. There is no need for a separate
-`@ExceptionHandler` per status class unless the response shape differs.
-
-Additional handlers on the same advice catch infrastructure failures that are
-not `ApiException`:
+Each domain type has its own handler method (same pattern as bookstore /
+sportsbook). Additional handlers cover infrastructure:
 
 | Trigger | Status | Detail |
 |---|---|---|
@@ -100,13 +75,8 @@ not `ApiException`:
 | `DataIntegrityViolationException` / optimistic lock | 409 | Concurrent or unique conflict |
 | `IOException` | 502 | File transfer failed |
 
-`ResponseEntityExceptionHandler` (the superclass) already maps many Spring MVC
-errors (for example Bean Validation / malformed JSON) into problem responses.
-Our advice only adds the domain and infrastructure cases above.
-
-**Not intercepted here:** failures stopped in the security filter chain before
-the controller runs (missing/invalid JWT). Those never reach
-`GlobalExceptionHandler`; Spring Security answers with 401/403 itself.
+`ResponseEntityExceptionHandler` already maps many Spring MVC errors (Bean
+Validation / malformed JSON). Security filter 401/403 never reach this advice.
 
 See
 [GlobalExceptionHandler.java](../src/main/java/com/example/taskmanagement/exception/GlobalExceptionHandler.java).
@@ -284,7 +254,7 @@ from mutable fields and associations, which is unsafe for JPA. `id` and
 `version` keep `@Setter(AccessLevel.NONE)` so identity and optimistic locking
 stay under persistence control.
 
-Custom `ApiException` types also skip Lombok accessors; see
+Domain exception types also skip Lombok accessors; see
 [Why exception classes do not use Lombok](#why-exception-classes-do-not-use-lombok).
 
 ## OpenAPI / Swagger special cases

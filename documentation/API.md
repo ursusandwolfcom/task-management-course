@@ -197,26 +197,26 @@ Example: `/tasks?projectId=1&priority=HIGH&status=NOT_STARTED&dueTo=2030-02-11`.
 
 ## Error handling
 
-Business failures throw typed `ApiException` subclasses from services. They are
-not caught in controllers: Spring MVC routes them to
+Business failures throw domain `RuntimeException` subclasses from services
+(message only; no `HttpStatus` in the type). They are not caught in controllers:
+Spring MVC routes each type to
 `@RestControllerAdvice` /
 [GlobalExceptionHandler](../src/main/java/com/example/taskmanagement/exception/GlobalExceptionHandler.java),
-which returns RFC 7807 `ProblemDetail` (`application/problem+json`). One
-`@ExceptionHandler(ApiException.class)` covers every subclass via inheritance.
-How interception works is explained under
+which maps exception class → HTTP status and returns RFC 7807 `ProblemDetail`
+(`application/problem+json`). How interception works:
 [How GlobalExceptionHandler intercepts exceptions](ARCHITECTURE.md#how-globalexceptionhandler-intercepts-exceptions).
 Class → status mapping:
-[exception table](ARCHITECTURE.md#custom-api-exceptions).
+[exception table](ARCHITECTURE.md#custom-domain-exceptions).
 
 | Status | Typical reason | Typed exception (when from services) |
 |---|---|---|
-| 400 | Validation, malformed dates/enums, unknown fields/sort, changed task project | `BadRequestException` (+ Bean Validation / sort handler) |
-| 401 | Missing/invalid/expired token or invalid login credentials | `UnauthorizedException` (login); filter for missing JWT |
-| 403 | Authenticated caller lacks owner/admin/comment-author permission | `ForbiddenException` |
-| 404 | Missing resource or project content inaccessible to the caller | `NotFoundException` |
-| 409 | Duplicate data, concurrent change, invalid assignee or deletion/member-removal guard | `ConflictException` (+ JPA/data-integrity handler) |
-| 413 | Multipart request exceeds upload limits, or archive page exceeds 25 MiB | `PayloadTooLargeException` (archive); servlet limits for multipart |
-| 502 | Dropbox operation or file transfer failed | `BadGatewayException` (+ `IOException` handler) |
+| 400 | Validation, malformed dates/enums, unknown fields/sort, changed task project | `InvalidBusinessDataException` (+ Bean Validation / sort handler) |
+| 401 | Missing/invalid/expired token or invalid login credentials | `InvalidCredentialsException` (login); filter for missing JWT |
+| 403 | Authenticated caller lacks owner/admin/comment-author permission | `InsufficientPrivilegesException` |
+| 404 | Missing resource or project content inaccessible to the caller | `EntityNotFoundException` |
+| 409 | Duplicate data, concurrent change, invalid assignee or deletion/member-removal guard | `ResourceConflictException` (+ JPA/data-integrity handler) |
+| 413 | Multipart request exceeds upload limits, or archive page exceeds 25 MiB | `AttachmentLimitExceededException` (archive); servlet limits for multipart |
+| 502 | Dropbox operation or file transfer failed | `ExternalStorageException` (+ `IOException` handler) |
 
 Example problem body shape:
 
