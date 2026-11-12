@@ -60,7 +60,7 @@ jobs:
             trap 'kill "$app_pid" 2>/dev/null || true' EXIT
             healthy=false
             for check in $(seq 1 60); do
-              if curl -fs http://127.0.0.1:18080/actuator/health | jq -e '.status == "UP"'; then
+              if curl -fs http://127.0.0.1:18080/api/actuator/health | jq -e '.status == "UP"'; then
                 healthy=true
                 break
               fi
@@ -68,8 +68,8 @@ jobs:
               sleep 1
             done
             test "$healthy" = true
-            test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/users/me)" = 401
-            curl -fs http://127.0.0.1:18080/v3/api-docs | jq -e '.paths["/api/tasks"] != null'
+            test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/users/me)" = 401
+            curl -fs http://127.0.0.1:18080/api/v3/api-docs | jq -e '.paths["/tasks"] != null'
             kill "$app_pid"
             wait "$app_pid" || true
             trap - EXIT
@@ -92,14 +92,14 @@ jobs:
           for attempt in 1 2; do
             healthy=false
             for check in $(seq 1 90); do
-              if curl -fs http://127.0.0.1:18081/actuator/health | jq -e '.status == "UP"'; then
+              if curl -fs http://127.0.0.1:18081/api/actuator/health | jq -e '.status == "UP"'; then
                 healthy=true
                 break
               fi
               sleep 1
             done
             test "$healthy" = true
-            curl -fs http://127.0.0.1:18081/v3/api-docs | jq -e '.paths["/api/tasks"] != null'
+            curl -fs http://127.0.0.1:18081/api/v3/api-docs | jq -e '.paths["/tasks"] != null'
             migration_count=$(docker compose --env-file "$course_env" exec -T postgres psql -U course -d course_container -tAc 'select count(*) from public.databasechangelog')
             test "$migration_count" = 1
             if [ "$attempt" = 1 ]; then

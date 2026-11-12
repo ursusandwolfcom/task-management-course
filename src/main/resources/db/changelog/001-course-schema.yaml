@@ -1,0 +1,366 @@
+databaseChangeLog:
+  - changeSet:
+      id: course-001
+      author: task-management
+      changes:
+        - createTable:
+            tableName: users
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: username
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: password_hash
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: email
+                  type: VARCHAR(254)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: first_name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: role
+                  type: VARCHAR(16)
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('USER', 'ADMIN'))
+
+        - createTable:
+            tableName: projects
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: VARCHAR(4000)
+              - column:
+                  name: start_date
+                  type: DATE
+              - column:
+                  name: end_date
+                  type: DATE
+              - column:
+                  name: status
+                  type: VARCHAR(24)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: owner_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_projects_owner
+                    references: users(id)
+        - sql:
+            sql: ALTER TABLE projects ADD CONSTRAINT projects_status_check CHECK (status IN ('INITIATED', 'IN_PROGRESS', 'COMPLETED'))
+        - sql:
+            sql: ALTER TABLE projects ADD CONSTRAINT projects_date_range_check CHECK (start_date IS NULL OR end_date IS NULL OR start_date <= end_date)
+        - createIndex:
+            tableName: projects
+            indexName: projects_owner_idx
+            columns:
+              - column:
+                  name: owner_id
+
+        - createTable:
+            tableName: project_members
+            columns:
+              - column:
+                  name: project_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: project_members_pkey
+                    foreignKeyName: fk_project_members_project
+                    references: projects(id)
+              - column:
+                  name: user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: project_members_pkey
+                    foreignKeyName: fk_project_members_user
+                    references: users(id)
+        - createIndex:
+            tableName: project_members
+            indexName: project_members_user_idx
+            columns:
+              - column:
+                  name: user_id
+
+        - createTable:
+            tableName: tasks
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: VARCHAR(4000)
+              - column:
+                  name: priority
+                  type: VARCHAR(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(24)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: due_date
+                  type: DATE
+              - column:
+                  name: project_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_tasks_project
+                    references: projects(id)
+              - column:
+                  name: assignee_id
+                  type: BIGINT
+                  constraints:
+                    foreignKeyName: fk_tasks_assignee
+                    references: users(id)
+        - sql:
+            sql: ALTER TABLE tasks ADD CONSTRAINT tasks_priority_check CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH'))
+        - sql:
+            sql: ALTER TABLE tasks ADD CONSTRAINT tasks_status_check CHECK (status IN ('NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'))
+        - createIndex:
+            tableName: tasks
+            indexName: tasks_project_idx
+            columns:
+              - column:
+                  name: project_id
+              - column:
+                  name: id
+        - createIndex:
+            tableName: tasks
+            indexName: tasks_assignee_idx
+            columns:
+              - column:
+                  name: assignee_id
+        - createIndex:
+            tableName: tasks
+            indexName: tasks_due_idx
+            columns:
+              - column:
+                  name: due_date
+              - column:
+                  name: id
+
+        - createTable:
+            tableName: labels
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: color
+                  type: VARCHAR(7)
+                  constraints:
+                    nullable: false
+
+        - createTable:
+            tableName: task_labels
+            columns:
+              - column:
+                  name: task_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: task_labels_pkey
+                    foreignKeyName: fk_task_labels_task
+                    references: tasks(id)
+              - column:
+                  name: label_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: task_labels_pkey
+                    foreignKeyName: fk_task_labels_label
+                    references: labels(id)
+        - createIndex:
+            tableName: task_labels
+            indexName: task_labels_label_idx
+            columns:
+              - column:
+                  name: label_id
+
+        - createTable:
+            tableName: comments
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: task_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_comments_task
+                    references: tasks(id)
+              - column:
+                  name: user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_comments_user
+                    references: users(id)
+              - column:
+                  name: text
+                  type: VARCHAR(4000)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: timestamp
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: comments
+            indexName: comments_task_idx
+            columns:
+              - column:
+                  name: task_id
+              - column:
+                  name: id
+
+        - createTable:
+            tableName: attachments
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: task_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_attachments_task
+                    references: tasks(id)
+              - column:
+                  name: dropbox_file_id
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: filename
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: upload_date
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: attachments
+            indexName: attachments_task_idx
+            columns:
+              - column:
+                  name: task_id
+              - column:
+                  name: id

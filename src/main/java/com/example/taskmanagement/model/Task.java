@@ -17,15 +17,24 @@ import jakarta.persistence.Version;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+@Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "tasks")
 public class Task {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Setter(AccessLevel.NONE)
     private Long id;
 
     @Version
+    @Setter(AccessLevel.NONE)
     private long version;
 
     @Column(nullable = false, length = 200)
@@ -56,79 +65,4 @@ public class Task {
     @JoinTable(name = "task_labels", joinColumns = @JoinColumn(name = "task_id", nullable = false),
             inverseJoinColumns = @JoinColumn(name = "label_id", nullable = false))
     private Set<Label> labels = new HashSet<>();
-
-    public Task() {
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public long getVersion() {
-        return version;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public Priority getPriority() {
-        return priority;
-    }
-
-    public void setPriority(Priority priority) {
-        this.priority = priority;
-    }
-
-    public TaskStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(TaskStatus status) {
-        this.status = status;
-    }
-
-    public LocalDate getDueDate() {
-        return dueDate;
-    }
-
-    public void setDueDate(LocalDate dueDate) {
-        this.dueDate = dueDate;
-    }
-
-    public Project getProject() {
-        return project;
-    }
-
-    public void setProject(Project project) {
-        this.project = project;
-    }
-
-    public User getAssignee() {
-        return assignee;
-    }
-
-    public void setAssignee(User assignee) {
-        this.assignee = assignee;
-    }
-
-    public Set<Label> getLabels() {
-        return labels;
-    }
-
-    public void setLabels(Set<Label> labels) {
-        this.labels = labels;
-    }
 }

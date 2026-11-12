@@ -12,14 +12,74 @@ There are no module ports, planning engines or alternate storage providers.
 | Package | Responsibility | Start reading |
 |---|---|---|
 | `controller` | Validated HTTP requests, status codes and authenticated actor IDs | [TaskController](../src/main/java/com/example/taskmanagement/controller/TaskController.java) |
-| `service` | CRUD, authorization and integrations | [TaskService](../src/main/java/com/example/taskmanagement/service/TaskService.java) |
+| `service` | Interfaces + `*ServiceImpl` for CRUD, authorization and integrations | [TaskService](../src/main/java/com/example/taskmanagement/service/TaskService.java) / [TaskServiceImpl](../src/main/java/com/example/taskmanagement/service/TaskServiceImpl.java) |
 | `repository` | Spring Data queries, pagination and project locking | [TaskRepository](../src/main/java/com/example/taskmanagement/repository/TaskRepository.java) |
 | `model` | Six JPA entities and assignment enums | [Task](../src/main/java/com/example/taskmanagement/model/Task.java) |
 | `dto` | Validated requests, filters and response records | [TaskRequest](../src/main/java/com/example/taskmanagement/dto/TaskRequest.java) |
 | `mapper` | Compile-time entity/DTO transformations | [ResponseMapper](../src/main/java/com/example/taskmanagement/mapper/ResponseMapper.java) |
 | `security` | JWT validation, live roles and BCrypt login | [SecurityConfig](../src/main/java/com/example/taskmanagement/security/SecurityConfig.java) |
 | `config` | UTC clock, Dropbox client, async email and OpenAPI | [ApplicationConfig](../src/main/java/com/example/taskmanagement/config/ApplicationConfig.java) |
-| `exception` | Safe HTTP problem responses | [GlobalExceptionHandler](../src/main/java/com/example/taskmanagement/exception/GlobalExceptionHandler.java) |
+| `exception` | Domain exceptions and Problem Detail mapping | [GlobalExceptionHandler](../src/main/java/com/example/taskmanagement/exception/GlobalExceptionHandler.java) |
+
+## Custom domain exceptions
+
+Services throw **domain** exceptions that extend `RuntimeException` with a
+message only (Mate bookstore style: `EntityNotFoundException`,
+`RegistrationException`). They do **not** carry `HttpStatus`, are **not** named
+after HTTP codes, and replace bare `RuntimeException` /
+`ResponseStatusException`.
+
+| Exception | Mapped HTTP status (in handler) | Typical use |
+|---|---|---|
+| `InvalidBusinessDataException` | 400 | Invalid dates, password policy, filename/project rules |
+| `InvalidCredentialsException` | 401 | Failed login (wrong identifier/password) |
+| `InsufficientPrivilegesException` | 403 | Missing owner/admin/comment-author rights |
+| `EntityNotFoundException` | 404 | Missing user/project/task/label/comment/attachment |
+| `ResourceConflictException` | 409 | Duplicate identity or illegal state (delete/member/assignee) |
+| `AttachmentLimitExceededException` | 413 | Attachment ZIP page over 25 MiB |
+| `ExternalStorageException` | 502 | Dropbox provider failures |
+
+### Why exception classes do not use Lombok
+
+They are small immutable failure values: constructor + `getMessage()` from
+`RuntimeException`. No extra fields, no setters, no `@Data`.
+
+### How `GlobalExceptionHandler` intercepts exceptions
+
+Controllers stay thin: they call services and do not wrap every failure in
+`try/catch`. When a service throws, Spring MVC resolves a matching
+`@ExceptionHandler`. Status codes live **only** in the advice.
+
+Request flow:
+
+1. Filter chain / DispatcherServlet invokes the controller.
+2. The service throws, for example, `new EntityNotFoundException("Task not found")`.
+3. DispatcherServlet asks exception resolvers.
+4. `@ExceptionHandler(EntityNotFoundException.class)` maps to HTTP 404 Problem Detail.
+5. With `spring.mvc.problemdetails.enabled=true`, the response is
+   `application/problem+json`.
+
+```java
+@ExceptionHandler(EntityNotFoundException.class)
+public ProblemDetail notFound(EntityNotFoundException exception) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+}
+```
+
+Each domain type has its own handler method (same pattern as bookstore /
+sportsbook). Additional handlers cover infrastructure:
+
+| Trigger | Status | Detail |
+|---|---|---|
+| `PropertyReferenceException` | 400 | Unknown sort field |
+| `DataIntegrityViolationException` / optimistic lock | 409 | Concurrent or unique conflict |
+| `IOException` | 502 | File transfer failed |
+
+`ResponseEntityExceptionHandler` already maps many Spring MVC errors (Bean
+Validation / malformed JSON). Security filter 401/403 never reach this advice.
+
+See
+[GlobalExceptionHandler.java](../src/main/java/com/example/taskmanagement/exception/GlobalExceptionHandler.java).
 
 ## Data model
 
@@ -40,10 +100,14 @@ and optimistic `version` fields; DTOs expose association IDs rather than persist
 objects. Comments and attachments use `LocalDateTime` interpreted as UTC. Project
 dates and task due dates use `LocalDate`.
 
-[The initial migration](../src/main/resources/db/changelog/001-course-schema.sql)
-defines foreign keys, enum constraints, uniqueness and retrieval indexes. Both
-application tables and Liquibase tracking are in `public`; Hibernate validates the
-schema instead of changing it at startup.
+[The initial YAML changelog](../src/main/resources/db/changelog/001-course-schema.yaml)
+(`course-001`, included from
+[db.changelog-master.yaml](../src/main/resources/db/changelog/db.changelog-master.yaml))
+defines tables, foreign keys, uniqueness and retrieval indexes with Liquibase
+`createTable` / `createIndex` change types. Enum and date-range checks use small
+`sql` ALTER statements because community Liquibase does not ship
+`addCheckConstraint`. Both application tables and Liquibase tracking are in
+`public`; Hibernate validates the schema instead of changing it at startup.
 
 ## MapStruct in practice
 
@@ -89,6 +153,174 @@ Get-Content target/generated-sources/annotations/com/example/taskmanagement/mapp
 If an IDE cannot resolve the generated bean, reimport the Maven project, enable
 annotation processing and run the Maven compile goal. The configuration follows
 [MapStruct's official Maven setup](https://mapstruct.org/documentation/stable/reference/html/#_apache_maven).
+
+## Lombok constructors — rule and exceptions
+
+Spring DI beans use constructor injection. Where the constructor only assigns
+`final` dependencies, the project uses Lombok
+[`@RequiredArgsConstructor`](https://projectlombok.org/features/RequiredArgsConstructor)
+instead of a handwritten constructor. Controllers and most `*ServiceImpl`
+classes follow that pattern. Maven runs Lombok before MapStruct via
+`lombok-mapstruct-binding`. Domain services expose an interface
+(`UserService`, `ProjectService`, …) and a Spring `@Service` implementation
+(`UserServiceImpl`, …); controllers and collaborating services depend on the
+interface.
+
+**Do not** put Lombok on JPA entities for this purpose. Entities keep an explicit
+no-arg constructor (and ordinary accessors) so Hibernate can instantiate and
+hydrate them. That is unrelated to Spring DI.
+
+Two Spring beans intentionally keep handwritten constructors.
+
+### 1. `JwtService` — constructor body is not a pure assignment
+
+```java
+public JwtService(UserRepository users, PasswordEncoder passwords,
+        JwtEncoder encoder, Clock clock) {
+    this.users = users;
+    this.passwords = passwords;
+    this.encoder = encoder;
+    this.clock = clock;
+    this.dummyHash = passwords.encode("invalid-login-timing-placeholder");
+}
+```
+
+`@RequiredArgsConstructor` would only write `this.field = field` for each
+`final` dependency. Here `dummyHash` is derived during construction: a BCrypt
+hash used on failed logins so password checks take a similar amount of time
+whether the username exists or not (timing side-channel mitigation).
+
+That value depends on the injected `PasswordEncoder` and must be computed once
+when the bean is created. Lombok cannot express “call `passwords.encode(...)` in
+the generated constructor”, so a handwritten constructor remains the clear,
+reviewable choice. Refactors that move the hash into a lazy getter or
+`@PostConstruct` would change when the work runs; they are not required for
+correctness and would obscure the security intent.
+
+See [JwtService](../src/main/java/com/example/taskmanagement/security/JwtService.java).
+
+### 2. `EmailServiceImpl` — `@Value` must stay on the constructor parameter
+
+```java
+public EmailServiceImpl(JavaMailSender sender, @Value("${notification.from}") String from) {
+    this.sender = sender;
+    this.from = from;
+}
+```
+
+Spring resolves `@Value` (and similar annotations) on **injection points** it
+sees: constructor parameters, setter parameters or fields it injects itself.
+`@RequiredArgsConstructor` generates a constructor **without** copying
+parameter annotations from fields. Putting `@Value` on a `final` field while
+letting Lombok generate the constructor does not reliably place `@Value` on the
+generated parameter, so the `from` address would not be injected as intended.
+
+Keeping an explicit constructor with `@Value` on the `from` parameter preserves
+constructor injection and makes the configuration key visible at the injection
+point. Alternatives (`@ConfigurationProperties`, a dedicated settings bean) are
+valid but heavier than this one-line property.
+
+See [EmailServiceImpl](../src/main/java/com/example/taskmanagement/service/EmailServiceImpl.java).
+
+**Rule of thumb:** use `@RequiredArgsConstructor` when the constructor would be
+only field assignments; keep a handwritten constructor when it contains logic or
+parameter annotations Spring must process.
+
+### JPA entities use `@Getter` / `@Setter` / `@NoArgsConstructor`
+
+The six entities (`User`, `Project`, `Task`, `Comment`, `Attachment`, `Label`)
+use Lombok accessors instead of handwritten get/set methods:
+
+```java
+@Getter
+@Setter
+@NoArgsConstructor
+@Entity
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Setter(AccessLevel.NONE)
+    private Long id;
+
+    @Version
+    @Setter(AccessLevel.NONE)
+    private long version;
+    // remaining fields keep class-level @Getter/@Setter
+}
+```
+
+Do **not** use `@Data` on entities: it generates `equals`/`hashCode`/`toString`
+from mutable fields and associations, which is unsafe for JPA. `id` and
+`version` keep `@Setter(AccessLevel.NONE)` so identity and optimistic locking
+stay under persistence control.
+
+Domain exception types also skip Lombok accessors; see
+[Why exception classes do not use Lombok](#why-exception-classes-do-not-use-lombok).
+
+## OpenAPI / Swagger special cases
+
+`ApplicationConfig` registers a global JWT `bearerAuth` scheme and applies it to
+every operation by default. Controllers add `@Tag`, `@Operation`, `@ApiResponses`
+and `@Parameter` so Swagger UI shows purpose, auth and real HTTP statuses.
+
+Two annotation patterns are easy to get wrong. They are documented here because
+they affect how reviewers and students use Swagger, not only how the JSON looks.
+
+### 1. Hide the JWT method argument
+
+Authenticated handlers take `@AuthenticationPrincipal Jwt jwt`. That argument is
+injected by Spring Security after the `Authorization: Bearer …` header is
+validated. It is **not** part of the public HTTP contract: clients never paste a
+JWT object into a request body or query field.
+
+Without `@Parameter(hidden = true)`, springdoc may render an extra Swagger input
+named like `jwt`. Operators then try to fill it manually and confuse it with the
+**Authorize** dialog. Hide the principal everywhere it appears:
+
+```java
+public UserResponse profile(
+        @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+    return users.profile(Long.valueOf(jwt.getSubject()));
+}
+```
+
+Rule of thumb: hide framework types the client does not send (`Jwt`,
+`Principal`, servlet request/response). Keep visible parameters for path, query,
+header and body fields that belong to the API.
+
+Public auth endpoints do the opposite for **security**, not for parameters:
+`@Operation(security = {})` clears the global bearer requirement so register/login
+do not show a lock in Swagger.
+
+### 2. Describe files as `string` + `format = binary`
+
+JSON request/response models use ordinary schemas (`UserResponse`, `TaskRequest`).
+File upload and download are raw bytes. OpenAPI represents binary payloads as
+`type: string` with `format: binary`.
+
+**Upload** uses `multipart/form-data`. The file part must be annotated so Swagger
+shows a **Choose file** control instead of a JSON text box:
+
+```java
+@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+public ResponseEntity<AttachmentResponse> upload(
+        @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
+        @RequestParam Long taskId,
+        @Parameter(description = "File to upload (1 B to 5 MB)", required = true,
+                content = @Content(
+                        mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE,
+                        schema = @Schema(type = "string", format = "binary")))
+        @RequestParam MultipartFile file) { ... }
+```
+
+**Download / ZIP** declare the same binary schema on the success `@ApiResponse`
+content (`application/octet-stream` or `application/zip`). Otherwise the UI
+implies a JSON string body while the server streams file bytes.
+
+See [AttachmentController](../src/main/java/com/example/taskmanagement/controller/AttachmentController.java)
+for upload, single-file download and paginated ZIP responses, and
+[AuthController](../src/main/java/com/example/taskmanagement/controller/AuthController.java)
+for public operations with empty security.
 
 ## Follow a task assignment
 

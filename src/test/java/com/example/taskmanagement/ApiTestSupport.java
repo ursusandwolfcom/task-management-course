@@ -1,27 +1,26 @@
 package com.example.taskmanagement;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 
 import com.example.taskmanagement.repository.UserRepository;
-import com.example.taskmanagement.service.DropboxService;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
+import com.example.taskmanagement.support.InMemoryDropboxService;
+import com.example.taskmanagement.support.IntegrationTestConfig;
+import com.example.taskmanagement.support.RecordingMailSender;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -29,7 +28,8 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-abstract class ApiTestSupport {
+@Import(IntegrationTestConfig.class)
+public abstract class ApiTestSupport {
     protected record Account(long id, String name, String token) {
     }
 
@@ -39,17 +39,16 @@ abstract class ApiTestSupport {
     protected ObjectMapper mapper;
     @Autowired
     protected UserRepository users;
-    @MockitoBean
-    protected DropboxService dropbox;
-    @MockitoBean
-    protected JavaMailSender mail;
-    @MockitoBean
-    protected Clock clock;
+    @Autowired
+    protected InMemoryDropboxService dropbox;
+    @Autowired
+    protected RecordingMailSender mail;
 
     @BeforeEach
-    void fixedTime() {
-        when(clock.instant()).thenReturn(Instant.parse("2030-02-10T09:00:00Z"));
-        when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+    void resetTestDoubles() {
+        dropbox.reset();
+        mail.clear();
+        mail.failSends(false);
     }
 
     protected MockHttpServletResponse call(String method, String path, String token, Object body) throws Exception {
@@ -71,10 +70,10 @@ abstract class ApiTestSupport {
 
     protected Account account() throws Exception {
         String name = "u" + UUID.randomUUID().toString().replace("-", "");
-        var registered = json(201, "POST", "/api/auth/register", null,
+        var registered = json(201, "POST", "/auth/register", null,
                 Map.of("username", name, "password", "password123", "email", name + "@example.test",
                         "firstName", "Test", "lastName", "User"));
-        String token = json(200, "POST", "/api/auth/login", null,
+        String token = json(200, "POST", "/auth/login", null,
                 Map.of("identifier", name, "password", "password123")).get("accessToken").asText();
         return new Account(registered.get("id").asLong(), name, token);
     }
@@ -85,7 +84,7 @@ abstract class ApiTestSupport {
     }
 
     protected long project(Account owner, Account... members) throws Exception {
-        return json(201, "POST", "/api/projects", owner.token(),
+        return json(201, "POST", "/projects", owner.token(),
                 projectBody(java.util.Arrays.stream(members).map(Account::id).toList())).get("id").asLong();
     }
 
@@ -102,7 +101,25 @@ abstract class ApiTestSupport {
     }
 
     protected long task(Account actor, long project, Long assignee) throws Exception {
-        return json(201, "POST", "/api/tasks", actor.token(), taskBody(project, assignee, List.of()))
+        return json(201, "POST", "/tasks", actor.token(), taskBody(project, assignee, List.of()))
                 .get("id").asLong();
+    }
+
+    protected List<SimpleMailMessage> awaitMails(int minimum) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            if (mail.messages().size() >= minimum) {
+                return mail.messages();
+            }
+            Thread.sleep(25);
+        }
+        assertThat(mail.messages().size()).as("expected at least %s mails", minimum).isGreaterThanOrEqualTo(minimum);
+        return mail.messages();
+    }
+
+    protected void awaitNoMails(long quietMillis) throws InterruptedException {
+        int before = mail.messages().size();
+        Thread.sleep(quietMillis);
+        assertThat(mail.messages()).hasSize(before);
     }
 }

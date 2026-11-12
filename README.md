@@ -51,9 +51,9 @@ keep the code easy to follow. Swagger provides the interactive browser interface
 
 | Service | Default address |
 |---|---|
-| Swagger UI | http://127.0.0.1:8081/swagger-ui/index.html |
-| OpenAPI JSON | http://127.0.0.1:8081/v3/api-docs |
-| Database health | http://127.0.0.1:8081/actuator/health |
+| Swagger UI | http://127.0.0.1:8081/api/swagger-ui/index.html |
+| OpenAPI JSON | http://127.0.0.1:8081/api/v3/api-docs |
+| Database health | http://127.0.0.1:8081/api/actuator/health |
 | Local email inbox | http://127.0.0.1:8026 |
 
 The application requires a **new, empty course database**. Compose uses a separate
@@ -62,7 +62,7 @@ the application does not import the existing product `.env`.
 
 ## First request
 
-In Swagger, execute `POST /api/auth/register`:
+In Swagger, execute `POST /auth/register`:
 
 ```json
 {
@@ -74,7 +74,7 @@ In Swagger, execute `POST /api/auth/register`:
 }
 ```
 
-Then call `POST /api/auth/login`:
+Then call `POST /auth/login`:
 
 ```json
 { "identifier": "alice", "password": "choose-a-strong-password" }
@@ -110,6 +110,16 @@ flowchart LR
 MapStruct is used in running application paths, including all six response models
 and label creation/update. See the [mapping walkthrough](documentation/ARCHITECTURE.md#mapstruct-in-practice).
 
+Swagger annotations document every controller. Two special cases — hiding the
+injected `Jwt` parameter and declaring multipart/binary file schemas — are
+explained in the [OpenAPI special cases](documentation/ARCHITECTURE.md#openapi--swagger-special-cases)
+section.
+
+Lombok `@RequiredArgsConstructor` replaces handwritten DI constructors on
+controllers and most services. Why `JwtService` and `EmailService` stay manual is
+documented under
+[Lombok constructors](documentation/ARCHITECTURE.md#lombok-constructors--rule-and-exceptions).
+
 ## Build and verification
 
 ```powershell
@@ -127,8 +137,9 @@ are substituted in automated tests; live integration acceptance is a separate st
 
 ## Documentation
 
+- [Changelog](CHANGELOG.md): recent fixes, delivery changes and verification evidence.
 - [API reference](documentation/API.md): routes, example bodies, filters and access rules.
-- [Architecture](documentation/ARCHITECTURE.md): package map, data relationships, MapStruct and transactions.
+- [Architecture](documentation/ARCHITECTURE.md): package map, data relationships, MapStruct, custom API exceptions, Lombok constructor exceptions, OpenAPI special cases and transactions.
 - [Spring lifecycle](documentation/SPRING_LIFECYCLE.md): singleton choices, initialization dependencies and AOP.
 - [Code review](documentation/CODE_REVIEW.md): fixed findings, Hibernate ownership and measured fetch plans.
 - [Operations](documentation/OPERATIONS.md): configuration, local execution, testing and troubleshooting.
@@ -136,8 +147,9 @@ are substituted in automated tests; live integration acceptance is a separate st
 
 ## Scope and delivery
 
-This standalone course version lives on `course/submission`. The extended product
-is preserved separately; this application does not migrate its data. Frontend,
+This standalone course repository publishes its submission on `main`; it was
+exported from the extended product's `course/submission` branch. The extended
+product is preserved separately; this application does not migrate its data. Frontend,
 graph planning, resource calendars, time tracking and extra storage/notification
 providers are outside this version.
 

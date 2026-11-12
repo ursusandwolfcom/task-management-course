@@ -2,8 +2,11 @@
 
 [README](../README.md) · [Architecture](ARCHITECTURE.md) · [Operations](OPERATIONS.md)
 
-Default Compose base URL: `http://127.0.0.1:8081`.
-Browse `/swagger-ui/index.html` or fetch `/v3/api-docs` for generated schemas.
+Default Compose base URL: `http://127.0.0.1:8081/api`
+(`server.servlet.context-path=/api`). All route tables below list servlet paths
+without that prefix (for example `/tasks`, `/users/me`). Controllers and
+`Location` headers use the same paths; the context path is applied by the
+container. Browse `{base}/swagger-ui/index.html` or `{base}/v3/api-docs`.
 
 ## Authentication
 
@@ -14,8 +17,8 @@ browser-session cookies or refresh-token endpoints.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/auth/register` | Create a USER account; returns 201 |
-| POST | `/api/auth/login` | Authenticate by username or email; returns a token |
+| POST | `/auth/register` | Create a USER account; returns 201 |
+| POST | `/auth/login` | Authenticate by username or email; returns a token |
 | GET | `/users/me` | Read the authenticated profile |
 | PUT | `/users/me` | Replace email, first name and last name |
 | PATCH | `/users/me` | Update supplied profile fields; omitted/null fields are retained |
@@ -47,21 +50,22 @@ authenticated request, so a role change applies to already-issued JWTs.
 
 | Area | Method and path | Notes |
 |---|---|---|
-| Projects | `POST /api/projects` | Create; authenticated user becomes owner |
-| Projects | `GET /api/projects` | List accessible projects; ADMIN can list all |
-| Projects | `GET/PUT/DELETE /api/projects/{id}` | Read, replace or delete |
-| Tasks | `POST /api/tasks` | Create within `projectId` |
-| Tasks | `GET /api/tasks?projectId={id}` | Paginated project task list |
-| Tasks | `GET/PUT/DELETE /api/tasks/{id}` | Read, replace or delete |
-| Comments | `POST /api/comments` | Body contains taskId and text |
-| Comments | `GET /api/comments?taskId={id}` | Paginated task discussion |
-| Comments | `DELETE /api/comments/{id}` | Delete an authorized comment |
-| Labels | `POST/GET /api/labels` | Create/list the shared catalog |
-| Labels | `PUT/DELETE /api/labels/{id}` | Replace/delete a label |
-| Attachments | `POST /api/attachments?taskId={id}` | Multipart form field `file` |
-| Attachments | `GET /api/attachments?taskId={id}` | Paginated metadata list |
-| Attachments | `GET /api/attachments/{id}/download` | Actual Dropbox bytes with Content-Disposition |
-| Attachments | `DELETE /api/attachments/{id}` | Remove remote file and metadata |
+| Projects | `POST /projects` | Create; authenticated user becomes owner |
+| Projects | `GET /projects` | List accessible projects; ADMIN can list all |
+| Projects | `GET/PUT/DELETE /projects/{id}` | Read, replace or delete |
+| Tasks | `POST /tasks` | Create within `projectId` |
+| Tasks | `GET /tasks?projectId={id}` | Paginated project task list |
+| Tasks | `GET/PUT/DELETE /tasks/{id}` | Read, replace or delete |
+| Comments | `POST /comments` | Body contains taskId and text |
+| Comments | `GET /comments?taskId={id}` | Paginated task discussion |
+| Comments | `DELETE /comments/{id}` | Delete an authorized comment |
+| Labels | `POST/GET /labels` | Create/list the shared catalog |
+| Labels | `PUT/DELETE /labels/{id}` | Replace/delete a label |
+| Attachments | `POST /attachments?taskId={id}` | Multipart form field `file` |
+| Attachments | `GET /attachments?taskId={id}` | ZIP with actual Dropbox files for the requested page |
+| Attachments | `GET /attachments/metadata?taskId={id}` | Paginated metadata list |
+| Attachments | `GET /attachments/{id}/download` | Actual Dropbox bytes with Content-Disposition |
+| Attachments | `DELETE /attachments/{id}` | Remove remote file and metadata |
 
 Create responses use 201. Successful DELETE returns 204 without a body.
 All six entity response types are produced by MapStruct.
@@ -71,7 +75,7 @@ All six entity response types are produced by MapStruct.
 Register/login as described in the README, authorize Swagger and note the ID
 returned by `GET /users/me`. IDs below are examples; use your returned IDs.
 
-**1. Create a project** — `POST /api/projects`:
+**1. Create a project** — `POST /projects`:
 
 ```json
 {
@@ -87,7 +91,7 @@ returned by `GET /users/me`. IDs below are examples; use your returned IDs.
 To invite an existing registered user, include their ID in `memberIds` on project
 PUT. Start/end dates are optional; when both are present, end must not precede start.
 
-**2. Create a label** — `POST /api/labels`:
+**2. Create a label** — `POST /labels`:
 
 ```json
 { "name": "backend", "color": "#4169E1" }
@@ -95,7 +99,7 @@ PUT. Start/end dates are optional; when both are present, end must not precede s
 
 Names are unique, at most 100 characters; colors use `#RRGGBB`.
 
-**3. Create and assign a task** — `POST /api/tasks`:
+**3. Create and assign a task** — `POST /tasks`:
 
 ```json
 {
@@ -114,8 +118,13 @@ Project owner or member may be the assignee. Omit/set null assigneeId for an
 unassigned task. Description and dueDate are optional. `labelIds` is required and
 may be empty. Project ID cannot change after creation. PUT replaces editable fields.
 Assignment to a different non-null assignee produces an email after commit.
+On task update, changes to name, description, status, priority, due date, labels
+or assignee notify the current assignee and project owner after commit. The actor
+is excluded and a user who is both owner and assignee receives one message.
+A new assignee receives an assignment email instead of an additional update email.
+A PUT with unchanged values sends no email; the previous assignee is not notified.
 
-**4. Add a comment** — `POST /api/comments`:
+**4. Add a comment** — `POST /comments`:
 
 ```json
 { "taskId": 1, "text": "Ready for review." }
@@ -124,17 +133,25 @@ Assignment to a different non-null assignee produces an email after commit.
 The server derives author and UTC timestamp. A comment emails the assignee unless
 the assignee authored it. Text is required and limited to 4,000 characters.
 
-**5. Upload a file** — use the multipart form in Swagger, or run:
+**5. Upload a file** — use the multipart form in Swagger (binary part; see
+[OpenAPI special cases](ARCHITECTURE.md#openapi--swagger-special-cases)), or run:
 
 ```powershell
-curl.exe -X POST "http://127.0.0.1:8081/api/attachments?taskId=1" `
+curl.exe -X POST "http://127.0.0.1:8081/attachments?taskId=1" `
   -H "Authorization: Bearer YOUR_TOKEN" -F "file=@notes.txt"
 ```
 
 Uploads accept 1 byte to 5 MB. The original filename must be a single name without
 path separators or control characters. The response contains the stored Dropbox
-file ID. List metadata to find the attachment ID, then download its bytes using
-`GET /api/attachments/{id}/download`.
+file ID. `GET /attachments?taskId=1` downloads a ZIP containing actual Dropbox
+files for the requested page. Entries use `<attachmentId>/<originalFilename>` so
+duplicate filenames remain distinct. Pagination and sorting use the same parameters
+as other lists; an empty page returns an empty ZIP. A page is limited to 25 MiB of
+uncompressed content; use a smaller `size` if the server returns 413. Provider
+failure returns 502 before a partial archive is sent.
+
+Use `GET /attachments/metadata?taskId=1` for metadata and pagination totals,
+or `GET /attachments/{id}/download` to download an individual file.
 
 **6. Complete the task** — PUT the complete task body with `status` changed to
 `COMPLETED`. Status fields are manually editable metadata; there are no execution
@@ -155,15 +172,15 @@ properties are rejected with 400.
 
 | List | Optional query filters |
 |---|---|
-| `/api/projects` | name, status, startFrom, endTo |
-| `/api/tasks?projectId=...` | name, status, priority, assigneeId, labelId, dueFrom, dueTo |
+| `/projects` | name, status, startFrom, endTo |
+| `/tasks?projectId=...` | name, status, priority, assigneeId, labelId, dueFrom, dueTo |
 
 Filters combine with AND. Name matching is a case-insensitive literal substring;
 percent/underscore are not search wildcards. Dates use `YYYY-MM-DD`. Project bounds
 select startDate >= startFrom and endDate <= endTo; task due bounds are inclusive.
 A reversed range is invalid; null dates do not match a supplied date bound.
 
-Example: `/api/tasks?projectId=1&priority=HIGH&status=NOT_STARTED&dueTo=2030-02-11`.
+Example: `/tasks?projectId=1&priority=HIGH&status=NOT_STARTED&dueTo=2030-02-11`.
 
 ## Authorization and deletion
 
@@ -180,16 +197,38 @@ Example: `/api/tasks?projectId=1&priority=HIGH&status=NOT_STARTED&dueTo=2030-02-
 
 ## Error handling
 
-| Status | Typical reason |
-|---|---|
-| 400 | Validation, malformed dates/enums, unknown fields/sort, changed task project |
-| 401 | Missing/invalid/expired token or invalid login credentials |
-| 403 | Authenticated caller lacks owner/admin/comment-author permission |
-| 404 | Missing resource or project content inaccessible to the caller |
-| 409 | Duplicate data, concurrent change, invalid assignee or deletion/member-removal guard |
-| 413 | Multipart request exceeds configured upload limits |
-| 502 | Dropbox operation or file transfer failed |
+Business failures throw domain `RuntimeException` subclasses from services
+(message only; no `HttpStatus` in the type). They are not caught in controllers:
+Spring MVC routes each type to
+`@RestControllerAdvice` /
+[GlobalExceptionHandler](../src/main/java/com/example/taskmanagement/exception/GlobalExceptionHandler.java),
+which maps exception class → HTTP status and returns RFC 7807 `ProblemDetail`
+(`application/problem+json`). How interception works:
+[How GlobalExceptionHandler intercepts exceptions](ARCHITECTURE.md#how-globalexceptionhandler-intercepts-exceptions).
+Class → status mapping:
+[exception table](ARCHITECTURE.md#custom-domain-exceptions).
 
-Application validation/conflict/provider errors use Spring problem responses;
-authentication may be rejected by the security filter before MVC handles the request.
-Public database health is `/actuator/health`; it does not test live Dropbox or SMTP.
+| Status | Typical reason | Typed exception (when from services) |
+|---|---|---|
+| 400 | Validation, malformed dates/enums, unknown fields/sort, changed task project | `InvalidBusinessDataException` (+ Bean Validation / sort handler) |
+| 401 | Missing/invalid/expired token or invalid login credentials | `InvalidCredentialsException` (login); filter for missing JWT |
+| 403 | Authenticated caller lacks owner/admin/comment-author permission | `InsufficientPrivilegesException` |
+| 404 | Missing resource or project content inaccessible to the caller | `EntityNotFoundException` |
+| 409 | Duplicate data, concurrent change, invalid assignee or deletion/member-removal guard | `ResourceConflictException` (+ JPA/data-integrity handler) |
+| 413 | Multipart request exceeds upload limits, or archive page exceeds 25 MiB | `AttachmentLimitExceededException` (archive); servlet limits for multipart |
+| 502 | Dropbox operation or file transfer failed | `ExternalStorageException` (+ `IOException` handler) |
+
+Example problem body shape:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Task not found"
+}
+```
+
+Authentication may be rejected by the security filter before MVC handles the
+request. Public database health is `/actuator/health`; it does not test live
+Dropbox or SMTP.
